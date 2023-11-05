@@ -60,6 +60,7 @@ configs.isabelle = {
             'isabelle', 'vscode_server',
             '-o', 'vscode_unicode_symbols',
             '-o', 'vscode_pide_extensions',
+            '-o', 'vscode_html_output=false',
             '-v',
             '-L', '~/Documents/isa.log',
         },
@@ -77,18 +78,6 @@ configs.isabelle = {
                 end,
             })
 
-            -- Create a new scratch buffer for "--STATE--"
-            state_buffer = vim.api.nvim_create_buf(true, true)
-            vim.api.nvim_buf_set_name(state_buffer, "--STATE--")
-            -- vim.api.nvim_buf_set_option(state_buffer, 'buftype', 'nofile')
-            -- vim.api.nvim_buf_set_option(state_buffer, 'bufhidden', 'hide')
-            -- vim.api.nvim_buf_set_option(state_buffer, 'swapfile', false)
-            -- vim.api.nvim_buf_set_option(state_buffer, 'buflisted', false)
-            -- vim.api.nvim_buf_set_option(state_buffer, 'filetype', 'scratch-state')
-
-            -- Set the content of the "--STATE--" buffer
-            vim.api.nvim_buf_set_lines(state_buffer, 0, -1, false, {})
-
             -- Create a new scratch buffer for "--OUTPUT--"
             output_buffer = vim.api.nvim_create_buf(true, true)
             vim.api.nvim_buf_set_name(output_buffer, "--OUTPUT--")
@@ -101,14 +90,29 @@ configs.isabelle = {
             -- Set the content of the "--OUTPUT--" buffer
             vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
 
-            -- Open the scratch buffers in a split window
+            -- -- Create a new scratch buffer for "--STATE--"
+            -- state_buffer = vim.api.nvim_create_buf(true, true)
+            -- vim.api.nvim_buf_set_name(state_buffer, "--STATE--")
+            -- -- vim.api.nvim_buf_set_option(state_buffer, 'buftype', 'nofile')
+            -- -- vim.api.nvim_buf_set_option(state_buffer, 'bufhidden', 'hide')
+            -- -- vim.api.nvim_buf_set_option(state_buffer, 'swapfile', false)
+            -- -- vim.api.nvim_buf_set_option(state_buffer, 'buflisted', false)
+            -- -- vim.api.nvim_buf_set_option(state_buffer, 'filetype', 'scratch-state')
+
+            -- -- Set the content of the "--STATE--" buffer
+            -- vim.api.nvim_buf_set_lines(state_buffer, 0, -1, false, {})
+
+            -- -- Open the scratch buffers in a split window
+            -- vim.api.nvim_command('vsplit')
+            -- vim.api.nvim_command('wincmd l')
+            -- vim.api.nvim_set_current_buf(state_buffer)
+
+            -- vim.api.nvim_command('split')
+            -- vim.api.nvim_command('wincmd j')
+            -- vim.api.nvim_set_current_buf(output_buffer)
             vim.api.nvim_command('vsplit')
             vim.api.nvim_command('wincmd l')
             vim.api.nvim_set_current_buf(output_buffer)
-
-            vim.api.nvim_command('split')
-            vim.api.nvim_command('wincmd j')
-            vim.api.nvim_set_current_buf(state_buffer)
 
             vim.api.nvim_command('wincmd h')
         end,
