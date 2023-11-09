@@ -42,7 +42,8 @@ local function set_message_margin(size)
     send_message('set_message_margin', { value = size })
 end
 
-local state_buffer = -1
+-- TODO somehow also save the isabelle buffer
+-- as just relying on it being the active buffer is really bad
 local output_buffer = -1
 
 configs.isabelle = {
@@ -52,8 +53,8 @@ configs.isabelle = {
             '-o', 'vscode_unicode_symbols',
             '-o', 'vscode_pide_extensions',
             '-o', 'vscode_html_output=false',
-            '-v',
-            '-L', '~/Documents/isa.log',
+            -- '-v',
+            -- '-L', '~/Documents/isa.log',
         },
         filetypes = { 'isabelle' },
         root_dir = function(fname)
@@ -65,46 +66,46 @@ configs.isabelle = {
                 buffer = bufnr,
                 callback = function(info)
                     caret_update(bufnr)
-                    set_message_margin(40)
+
+                    local windows = vim.fn.getbufinfo({ bufnr = output_buffer })[1].windows
+                    local width
+                    for _, win_id in ipairs(windows) do
+                        width = vim.api.nvim_win_get_width(win_id)
+                        break
+                    end
+                    set_message_margin(width) -- TODO the LSP doesn't seem to use this info
                 end,
             })
 
-            -- Create a new scratch buffer for "--OUTPUT--"
+            -- create a new scratch buffer for output & state
             output_buffer = vim.api.nvim_create_buf(true, true)
             vim.api.nvim_buf_set_name(output_buffer, "--OUTPUT--")
-            -- vim.api.nvim_buf_set_option(output_buffer, 'buftype', 'nofile')
-            -- vim.api.nvim_buf_set_option(output_buffer, 'bufhidden', 'hide')
-            -- vim.api.nvim_buf_set_option(output_buffer, 'swapfile', false)
-            -- vim.api.nvim_buf_set_option(output_buffer, 'buflisted', false)
-            -- vim.api.nvim_buf_set_option(output_buffer, 'filetype', 'scratch-output')
+            vim.api.nvim_buf_set_option(output_buffer, 'buftype', 'nofile')
+            vim.api.nvim_buf_set_option(output_buffer, 'bufhidden', 'hide')
+            vim.api.nvim_buf_set_option(output_buffer, 'swapfile', false)
+            vim.api.nvim_buf_set_option(output_buffer, 'buflisted', false)
+            vim.api.nvim_buf_set_option(output_buffer, 'filetype', 'scratch-output')
 
-            -- Set the content of the "--OUTPUT--" buffer
+            -- set the content of the output buffer
             vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
 
-            -- -- Create a new scratch buffer for "--STATE--"
-            -- state_buffer = vim.api.nvim_create_buf(true, true)
-            -- vim.api.nvim_buf_set_name(state_buffer, "--STATE--")
-            -- -- vim.api.nvim_buf_set_option(state_buffer, 'buftype', 'nofile')
-            -- -- vim.api.nvim_buf_set_option(state_buffer, 'bufhidden', 'hide')
-            -- -- vim.api.nvim_buf_set_option(state_buffer, 'swapfile', false)
-            -- -- vim.api.nvim_buf_set_option(state_buffer, 'buflisted', false)
-            -- -- vim.api.nvim_buf_set_option(state_buffer, 'filetype', 'scratch-state')
-
-            -- -- Set the content of the "--STATE--" buffer
-            -- vim.api.nvim_buf_set_lines(state_buffer, 0, -1, false, {})
-
-            -- -- Open the scratch buffers in a split window
-            -- vim.api.nvim_command('vsplit')
-            -- vim.api.nvim_command('wincmd l')
-            -- vim.api.nvim_set_current_buf(state_buffer)
-
-            -- vim.api.nvim_command('split')
-            -- vim.api.nvim_command('wincmd j')
-            -- vim.api.nvim_set_current_buf(output_buffer)
+            -- place the output buffer
             vim.api.nvim_command('vsplit')
             vim.api.nvim_command('wincmd l')
             vim.api.nvim_set_current_buf(output_buffer)
 
+            -- make the output buffer automatically quit
+            -- if it's the last buffer
+            vim.api.nvim_create_autocmd({"BufEnter"}, {
+                buffer = output_buffer,
+                callback = function(info)
+                    if #vim.api.nvim_list_wins() == 1 then
+                        vim.cmd "quit"
+                    end
+                end,
+            })
+
+            -- put focus back on main buffer
             vim.api.nvim_command('wincmd h')
         end,
         handlers = {
@@ -136,7 +137,7 @@ configs.isabelle = {
                     ['text_inner_numeral'] = 'Todo',
                     ['text_inner_quoted'] = 'String',
                     ['text_comment1'] = 'Comment',
-                    ['text_comment2'] = 'Todo', -- seems to not exist in the LSP?
+                    ['text_comment2'] = 'Todo', -- seems to not exist in the LSP
                     ['text_comment3'] = 'Todo',
                     ['text_dynamic'] = 'Todo',
                     ['text_class_parameter'] = 'Todo',
@@ -195,7 +196,7 @@ configs.isabelle = {
         },
         SetMessageMargin = {
             function()
-                set_message_margin(40)
+                set_message_margin(40) -- TODO
             end
         },
     },
