@@ -42,15 +42,6 @@ local function set_message_margin(size)
     send_message('set_message_margin', { value = size })
 end
 
--- Function to convert a Lua table to a list of strings
-function tableToListStrings(table)
-    local list = {}
-    for _, value in ipairs(table) do
-        table.insert(list, tostring(value))
-    end
-    return list
-end
-
 local state_buffer = -1
 local output_buffer = -1
 
@@ -123,6 +114,60 @@ configs.isabelle = {
                     table.insert(lines, s)
                 end
                 vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, lines)
+            end,
+            ['PIDE/decoration'] = function(err, result, ctx, config)
+                local ns_id = vim.api.nvim_create_namespace('isar-lsp')
+
+                local hl_group_map = {
+                    ['background_unprocessed1'] = nil,
+                    ['background_running1'] = nil,
+                    ['background_canceled'] = nil,
+                    ['background_bad'] = nil,
+                    ['background_intensify'] = nil,
+                    ['background_markdown_bullet1'] = 'markdownH1',
+                    ['background_markdown_bullet2'] = 'markdownH2',
+                    ['background_markdown_bullet3'] = 'markdownH3',
+                    ['background_markdown_bullet4'] = 'markdownH4',
+                    ['foreground_quoted'] = nil,
+                    ['text_main'] = 'Normal',
+                    ['text_quasi_keyword'] = 'Keyword',
+                    ['text_free'] = 'Function',
+                    ['text_bound'] = 'Identifier',
+                    ['text_inner_numeral'] = 'Todo',
+                    ['text_inner_quoted'] = 'String',
+                    ['text_comment1'] = 'Comment',
+                    ['text_comment2'] = 'Todo', -- seems to not exist in the LSP?
+                    ['text_comment3'] = 'Todo',
+                    ['text_dynamic'] = 'Todo',
+                    ['text_class_parameter'] = 'Todo',
+                    ['text_antiquote'] = 'Todo',
+                    ['text_raw_text'] = 'Todo',
+                    ['text_plain_text'] = 'Todo',
+                    ['text_overview_unprocessed'] = nil,
+                    ['text_overview_running'] = nil,
+                    ['text_overview_error'] = nil,
+                    ['text_overview_warning'] = nil,
+                    ['dotted_writeln'] = 'Typedef', -- no clue
+                    ['dotted_warning'] = 'Todo',
+                    ['spell_checker'] = 'Underlined',
+                }
+
+                local decorator = function(hl_group, content)
+                    for _, range in ipairs(content) do
+                        local start_line = range.range[1]
+                        local start_col = range.range[2]
+                        local end_line = range.range[3]
+                        local end_col = range.range[4]
+                        vim.api.nvim_buf_set_extmark(0, ns_id, start_line, start_col, {hl_group = hl_group, end_line=end_line, end_col=end_col})
+                    end
+                end
+
+                for _, entry in ipairs(result.entries) do
+                    hl_group = hl_group_map[entry.type]
+                    if hl_group then
+                        decorator(hl_group, entry.content)
+                    end
+                end
             end,
         },
     },
