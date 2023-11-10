@@ -12,6 +12,8 @@ Mind you also that the language server needs a little bit before it starts up. W
 
 ## Install
 
+### isabelle-lsp.nvim
+
 Install with your package manager of choice, e.g. [lazy.nvim](https://github.com/folke/lazy.nvim):
 ```lua
 require('lazy').setup({
@@ -24,6 +26,23 @@ require('lazy').setup({
 })
 ```
 
+### isabelle-emacs
+
+See also the [Preparation section of the isabelle-emacs install guide](https://github.com/m-fleury/isabelle-emacs/blob/Isabelle2023-vsce/src/Tools/emacs-lsp/spacemacs_layers/isabelle/README.org#preparation).
+
+1. Clone the [isabelle-emacs](https://github.com/m-fleury/isabelle-emacs) Repository:
+    ```sh
+    git clone https://github.com/m-fleury/isabelle-emacs.git
+    cd isabelle-emacs
+    git checkout Isabelle2023-vsce
+    ```
+2. Initialize Isabelle:
+    ```sh
+    ./bin/isabelle components -I
+    ./bin/isabelle components -a
+    ./bin/isabelle build -b HOL
+    ```
+
 ## Quickstart
 
 1. Neovim does not have an isabelle filetype, so you have to add one yourself:
@@ -35,18 +54,14 @@ require('lazy').setup({
     })
     ```
     Alternatively you can install a plugin that creates this filetype for you, like [isabelle-syn.nvim](https://github.com/Treeniks/isabelle-syn.nvim) (which will also include some static syntax highlighting).
-2. Close the [isabelle-emacs](https://github.com/m-fleury/isabelle-emacs) Repository:
-    ```sh
-    git clone https://github.com/m-fleury/isabelle-emacs.git
-    ```
-3. Add the isabelle LSP to your LSP configurations:
+2. Add the isabelle LSP to your LSP configurations:
     ```lua
     require('isabelle-lsp').setup({
         isabelle_path = '/path/to/isabelle-emacs/bin/isabelle'
     })
     ```
     If the isabelle-emacs `isabelle` binary is already in your PATH (and *before* the original `isabelle` binary), then you can also leave out the `isabelle_path` part.
-4. Enable the language server:
+3. Enable the language server:
     ```lua
     local lspconfig = require('lspconfig')
     lspconfig.isabelle.setup({})
