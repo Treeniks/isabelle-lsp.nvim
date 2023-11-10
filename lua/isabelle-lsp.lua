@@ -47,6 +47,7 @@ end
 local function apply_config(isabelle_path)
     local thy_buffer
     local output_buffer
+    -- namespace of dynamic syntax highlighting
     local syn_id
 
     configs.isabelle = {
@@ -74,14 +75,6 @@ local function apply_config(isabelle_path)
                     buffer = thy_buffer,
                     callback = function(info)
                         caret_update(thy_buffer)
-
-                        local windows = vim.fn.getbufinfo({ bufnr = output_buffer })[1].windows
-                        local width
-                        for _, win_id in ipairs(windows) do
-                            width = vim.api.nvim_win_get_width(win_id)
-                            break
-                        end
-                        set_message_margin(width) -- TODO the LSP doesn't seem to use this info
                     end,
                 })
 
@@ -115,6 +108,9 @@ local function apply_config(isabelle_path)
 
                 -- put focus back on main buffer
                 vim.api.nvim_command('wincmd h')
+
+                -- TODO not sure what this does exactly
+                set_message_margin(50)
             end,
             handlers = {
                 ['PIDE/dynamic_output'] = function(err, result, ctx, config)
