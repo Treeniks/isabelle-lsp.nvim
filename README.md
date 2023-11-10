@@ -1,1 +1,1 @@
-# isar-lsp.nvim
+# isabelle-lsp.nvim
