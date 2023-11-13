@@ -20,7 +20,9 @@ local function caret_update(bufnr)
     local fname = vim.api.nvim_buf_get_name(bufnr)
     local pos = vim.api.nvim_win_get_cursor(0)
 
-    send_message('caret_update', { uri = 'file://' .. fname, line = pos[1] - 1, character = pos[2] - 1 })
+    if fname and pos then
+        send_message('caret_update', { uri = 'file://' .. fname, line = pos[1] - 1, character = pos[2] - 1 })
+    end
 end
 
 local function preview_request(bufnr)
@@ -29,7 +31,9 @@ local function preview_request(bufnr)
     local fname = vim.api.nvim_buf_get_name(bufnr)
     local pos = vim.fn.getpos(bufnr)
 
-    send_message('preview_request', { uri = 'file://' .. fname, column = 1 })
+    if fname then
+        send_message('preview_request', { uri = 'file://' .. fname, column = 1 })
+    end
 end
 
 local function state_init()
@@ -47,8 +51,43 @@ end
 local function apply_config(isabelle_path)
     local thy_buffer
     local output_buffer
-    -- namespace of dynamic syntax highlighting
-    local syn_id
+
+    local hl_group_map = {
+        ['background_unprocessed1'] = nil,
+        ['background_running1'] = nil,
+        ['background_canceled'] = nil,
+        ['background_bad'] = nil,
+        ['background_intensify'] = nil,
+        ['background_markdown_bullet1'] = 'markdownH1',
+        ['background_markdown_bullet2'] = 'markdownH2',
+        ['background_markdown_bullet3'] = 'markdownH3',
+        ['background_markdown_bullet4'] = 'markdownH4',
+        ['foreground_quoted'] = nil,
+        ['text_main'] = 'Normal',
+        ['text_quasi_keyword'] = 'Keyword',
+        ['text_free'] = 'Function',
+        ['text_bound'] = 'Identifier',
+        ['text_inner_numeral'] = 'Todo',
+        ['text_inner_quoted'] = 'String',
+        ['text_comment1'] = 'Comment',
+        ['text_comment2'] = 'Todo', -- seems to not exist in the LSP
+        ['text_comment3'] = 'Todo',
+        ['text_dynamic'] = 'Todo',
+        ['text_class_parameter'] = 'Todo',
+        ['text_antiquote'] = 'Todo',
+        ['text_raw_text'] = 'Todo',
+        ['text_plain_text'] = 'Todo',
+        ['text_overview_unprocessed'] = nil,
+        ['text_overview_running'] = 'Todo',
+        ['text_overview_error'] = 'DiagnosticError',
+        ['text_overview_warning'] = 'DiagnosticWarn',
+        ['dotted_writeln'] = 'Typedef', -- no clue
+        ['dotted_warning'] = 'Todo',
+        ['dotted_information'] = nil,
+        ['spell_checker'] = 'Underlined',
+    }
+    
+    local hl_group_namespace_map = {}
 
     configs.isabelle = {
         default_config = {
@@ -68,8 +107,11 @@ local function apply_config(isabelle_path)
             on_attach = function(client, bufnr)
                 thy_buffer = bufnr
 
-                -- create namespace for syntax highlighting
-                syn_id = vim.api.nvim_create_namespace('isabelle-lsp')
+                -- create namespaces for syntax highlighting
+                for group, _ in pairs(hl_group_map) do
+                    local id = vim.api.nvim_create_namespace('isabelle-lsp.' .. group)
+                    hl_group_namespace_map[group] = id
+                end
 
                 vim.api.nvim_create_autocmd({"CursorMoved","CursorMovedI"}, {
                     buffer = thy_buffer,
@@ -121,56 +163,23 @@ local function apply_config(isabelle_path)
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, lines)
                 end,
                 ['PIDE/decoration'] = function(err, result, ctx, config)
-                    local hl_group_map = {
-                        ['background_unprocessed1'] = nil,
-                        ['background_running1'] = nil,
-                        ['background_canceled'] = nil,
-                        ['background_bad'] = nil,
-                        ['background_intensify'] = nil,
-                        ['background_markdown_bullet1'] = 'markdownH1',
-                        ['background_markdown_bullet2'] = 'markdownH2',
-                        ['background_markdown_bullet3'] = 'markdownH3',
-                        ['background_markdown_bullet4'] = 'markdownH4',
-                        ['foreground_quoted'] = nil,
-                        ['text_main'] = 'Normal',
-                        ['text_quasi_keyword'] = 'Keyword',
-                        ['text_free'] = 'Function',
-                        ['text_bound'] = 'Identifier',
-                        ['text_inner_numeral'] = 'Todo',
-                        ['text_inner_quoted'] = 'String',
-                        ['text_comment1'] = 'Comment',
-                        ['text_comment2'] = 'Todo', -- seems to not exist in the LSP
-                        ['text_comment3'] = 'Todo',
-                        ['text_dynamic'] = 'Todo',
-                        ['text_class_parameter'] = 'Todo',
-                        ['text_antiquote'] = 'Todo',
-                        ['text_raw_text'] = 'Todo',
-                        ['text_plain_text'] = 'Todo',
-                        ['text_overview_unprocessed'] = nil,
-                        ['text_overview_running'] = 'Todo',
-                        ['text_overview_error'] = 'DiagnosticError',
-                        ['text_overview_warning'] = 'DiagnosticWarn',
-                        ['dotted_writeln'] = 'Typedef', -- no clue
-                        ['dotted_warning'] = 'Todo',
-                        ['spell_checker'] = 'Underlined',
-                    }
-
-                    local decorator = function(hl_group, content)
+                    local decorator = function(hl_group, content, syn_id)
                         for _, range in ipairs(content) do
                             local start_line = range.range[1]
                             local start_col = range.range[2]
                             local end_line = range.range[3]
                             local end_col = range.range[4]
-                            vim.api.nvim_buf_set_extmark(0, syn_id, start_line, start_col, {hl_group = hl_group, end_line=end_line, end_col=end_col})
+                            vim.api.nvim_buf_set_extmark(thy_buffer, syn_id, start_line, start_col, {hl_group = hl_group, end_line=end_line, end_col=end_col})
                         end
                     end
 
-                    vim.api.nvim_buf_clear_namespace(thy_buffer, syn_id, 0, -1)
 
                     for _, entry in ipairs(result.entries) do
                         hl_group = hl_group_map[entry.type]
-                        if hl_group then
-                            decorator(hl_group, entry.content)
+                        id = hl_group_namespace_map[entry.type]
+                        if hl_group and id then
+                            vim.api.nvim_buf_clear_namespace(thy_buffer, id, 0, -1)
+                            decorator(hl_group, entry.content, id)
                         end
                     end
                 end,
