@@ -142,6 +142,7 @@ local function apply_config(isabelle_path, vsplit)
                     vim.api.nvim_command('wincmd j')
                 end
                 vim.api.nvim_set_current_buf(output_buffer)
+                output_window = vim.api.nvim_get_current_win()
 
                 -- make the output buffer automatically quit
                 -- if it's the last buffer
@@ -161,8 +162,9 @@ local function apply_config(isabelle_path, vsplit)
                     vim.api.nvim_command('wincmd k')
                 end
 
-                -- TODO not sure what this does exactly
-                set_message_margin(50)
+                -- TODO update on change
+                width = vim.api.nvim_win_get_width(output_window)
+                set_message_margin(width)
             end,
             handlers = {
                 ['PIDE/dynamic_output'] = function(err, result, ctx, config)
@@ -219,7 +221,8 @@ local function apply_config(isabelle_path, vsplit)
             },
             SetMessageMargin = {
                 function()
-                    set_message_margin(40) -- TODO
+                    width = vim.api.nvim_win_get_width(output_window)
+                    set_message_margin(width)
                 end
             },
         },
