@@ -68,3 +68,5 @@ See also the [Preparation section of the isabelle-emacs install guide](https://g
     ```
 
 Refer to [`nvim-lspconfig`](https://github.com/neovim/nvim-lspconfig)'s instructions on how to set up the language server client and keybinds.
+
+<!-- vsplit vs split config -->

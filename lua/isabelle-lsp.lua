@@ -48,8 +48,9 @@ local function set_message_margin(size)
     send_message('set_message_margin', { value = size })
 end
 
-local function apply_config(isabelle_path)
+local function apply_config(isabelle_path, vsplit)
     local thy_buffer
+    local output_window
     local output_buffer
 
     local hl_group_map = {
@@ -133,8 +134,13 @@ local function apply_config(isabelle_path)
                 vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
 
                 -- place the output buffer
-                vim.api.nvim_command('vsplit')
-                vim.api.nvim_command('wincmd l')
+                if vsplit then
+                    vim.api.nvim_command('vsplit')
+                    vim.api.nvim_command('wincmd l')
+                else
+                    vim.api.nvim_command('split')
+                    vim.api.nvim_command('wincmd j')
+                end
                 vim.api.nvim_set_current_buf(output_buffer)
 
                 -- make the output buffer automatically quit
@@ -149,7 +155,11 @@ local function apply_config(isabelle_path)
                 })
 
                 -- put focus back on main buffer
-                vim.api.nvim_command('wincmd h')
+                if vsplit then
+                    vim.api.nvim_command('wincmd h')
+                else
+                    vim.api.nvim_command('wincmd k')
+                end
 
                 -- TODO not sure what this does exactly
                 set_message_margin(50)
@@ -227,7 +237,14 @@ M.setup = function(user_config)
         isabelle_path = 'isabelle'
     end
 
-    apply_config(isabelle_path)
+    local vsplit = user_config['vsplit']
+    -- technically not needed
+    -- but for transparency
+    if not vsplit then
+        vsplit = false
+    end
+
+    apply_config(isabelle_path, vsplit)
 end
 
 return M
