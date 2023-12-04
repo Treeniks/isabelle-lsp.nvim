@@ -10,7 +10,7 @@ Neovim does not have an isabelle filetype, so you have to add one yourself or in
 
 The Isabelle language server will handle most syntax highlighting, in particular all dynamic syntax highlighting, however for some more static things (keywords like `theorem` and `lemma`), you will additionally need a normal vim syntax definition, e.g. [isabelle-syn.nvim](https://github.com/Treeniks/isabelle-syn.nvim).
 
-Mind you also that the language server needs a little bit before it starts up. When you open a `.thy` file, it will start the language server in the background and open an output panel once it's running. If it's the first time starting the language server, it will take *much* longer as isabelle will first have to build it.
+Mind you also that the language server needs a little bit before it starts up. When you open a `.thy` file, it will start the language server in the background and open an output panel once it's running. If it's the first time starting the language server, it might take *much* longer as isabelle will first have to build it.
 
 ## Install
 
@@ -99,3 +99,7 @@ require('isabelle-lsp').setup({
     vsplit = true,
 })
 ```
+
+### Font
+
+You will need to use a font in your terminal that supports the special symbols of Isabelle. [JuliaMono](https://juliamono.netlify.app) has worked quite well for me.
