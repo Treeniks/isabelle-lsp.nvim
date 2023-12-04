@@ -87,7 +87,7 @@ local function apply_config(isabelle_path, vsplit)
         ['dotted_information'] = nil,
         ['spell_checker'] = 'Underlined',
     }
-    
+
     local hl_group_namespace_map = {}
 
     configs.isabelle = {

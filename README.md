@@ -43,6 +43,26 @@ See also the [Preparation section of the isabelle-emacs install guide](https://g
     ./bin/isabelle build -b HOL
     ```
 
+### Patch isabelle-emacs
+
+The Language Server has one particular quirk that doesn't play nice with neovim's LSP client: The way document changes are registered within the Server often desynchronizes with the neovim client. To fix this, you will have to manually edit `isabelle-emacs`'s LSP code.
+
+In the file `isabelle-emacs/src/Tools/VSCode/src/language_server.scala`, you will have to change the `change_document` function:
+```scala
+  private def change_document(
+    file: JFile,
+    version: Long,
+    changes: List[LSP.TextDocumentChange]
+  ): Unit = {
+    changes.foreach(change =>
+      resources.change_model(session, editor, file, version, change.text, change.range))
+
+    delay_input.invoke()
+    delay_output.invoke()
+  }
+```
+Afterwards, you will need to let isabelle rebuild its tools. Simply running the `isabelle-emacs/bin/isabelle` binary again is enough.
+
 ## Quickstart
 
 1. Neovim does not have an isabelle filetype, so you have to add one yourself:
@@ -57,10 +77,10 @@ See also the [Preparation section of the isabelle-emacs install guide](https://g
 2. Add the isabelle LSP to your LSP configurations:
     ```lua
     require('isabelle-lsp').setup({
-        isabelle_path = '/path/to/isabelle-emacs/bin/isabelle'
+        isabelle_path = '/path/to/isabelle-emacs/bin/isabelle',
     })
     ```
-    If the isabelle-emacs `isabelle` binary is already in your PATH (and *before* the original `isabelle` binary), then you can also leave out the `isabelle_path` part.
+    The `isabelle_path` line if optional if the isabelle-emacs `isabelle` binary is already in your PATH (and *not* the original `isabelle` binary).
 3. Enable the language server:
     ```lua
     local lspconfig = require('lspconfig')
@@ -69,4 +89,11 @@ See also the [Preparation section of the isabelle-emacs install guide](https://g
 
 Refer to [`nvim-lspconfig`](https://github.com/neovim/nvim-lspconfig)'s instructions on how to set up the language server client and keybinds.
 
-<!-- vsplit vs split config -->
+### Vertical Split instead of Horizontal Split
+
+If you want to open a vertical split instead of a horizontal split when you open an Isabelle file, you can specify so in the setup:
+```lua
+require('isabelle-lsp').setup({
+    vsplit = true,
+})
+```
