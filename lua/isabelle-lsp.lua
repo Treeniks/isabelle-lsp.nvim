@@ -31,7 +31,7 @@ local function preview_request(bufnr)
     local fname = vim.api.nvim_buf_get_name(bufnr)
     local pos = vim.fn.getpos(bufnr)
 
-    if fname then
+    if fname and pos then
         send_message('preview_request', { uri = 'file://' .. fname, column = 1 })
     end
 end
@@ -106,7 +106,13 @@ local function apply_config(isabelle_path, vsplit)
             end,
             single_file_support = true,
             on_attach = function(client, bufnr)
-                thy_buffer = bufnr
+                -- only update the thy buffer if it's the first buffer
+                -- TODO this means that only *one* buffer can be used for the LSP
+                -- but it would be nice to have multiple buffers and the ability to switch between them
+                -- but this is better than it breaking when you open another .thy file
+                if not thy_buffer then
+                    thy_buffer = bufnr
+                end
 
                 -- create namespaces for syntax highlighting
                 for group, _ in pairs(hl_group_map) do
@@ -121,50 +127,53 @@ local function apply_config(isabelle_path, vsplit)
                     end,
                 })
 
-                -- create a new scratch buffer for output & state
-                output_buffer = vim.api.nvim_create_buf(true, true)
-                vim.api.nvim_buf_set_name(output_buffer, "--OUTPUT--")
-                vim.api.nvim_buf_set_option(output_buffer, 'buftype', 'nofile')
-                vim.api.nvim_buf_set_option(output_buffer, 'bufhidden', 'hide')
-                vim.api.nvim_buf_set_option(output_buffer, 'swapfile', false)
-                vim.api.nvim_buf_set_option(output_buffer, 'buflisted', false)
-                vim.api.nvim_buf_set_option(output_buffer, 'filetype', 'scratch-output')
+                -- TODO see above
+                if not output_buffer then
+                    -- create a new scratch buffer for output & state
+                    output_buffer = vim.api.nvim_create_buf(true, true)
+                    vim.api.nvim_buf_set_name(output_buffer, "--OUTPUT--")
+                    vim.api.nvim_buf_set_option(output_buffer, 'buftype', 'nofile')
+                    vim.api.nvim_buf_set_option(output_buffer, 'bufhidden', 'hide')
+                    vim.api.nvim_buf_set_option(output_buffer, 'swapfile', false)
+                    vim.api.nvim_buf_set_option(output_buffer, 'buflisted', false)
+                    vim.api.nvim_buf_set_option(output_buffer, 'filetype', 'scratch-output')
 
-                -- set the content of the output buffer
-                vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
+                    -- set the content of the output buffer
+                    vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
 
-                -- place the output buffer
-                if vsplit then
-                    vim.api.nvim_command('vsplit')
-                    vim.api.nvim_command('wincmd l')
-                else
-                    vim.api.nvim_command('split')
-                    vim.api.nvim_command('wincmd j')
+                    -- place the output buffer
+                    if vsplit then
+                        vim.api.nvim_command('vsplit')
+                        vim.api.nvim_command('wincmd l')
+                    else
+                        vim.api.nvim_command('split')
+                        vim.api.nvim_command('wincmd j')
+                    end
+                    vim.api.nvim_set_current_buf(output_buffer)
+                    output_window = vim.api.nvim_get_current_win()
+
+                    -- make the output buffer automatically quit
+                    -- if it's the last buffer
+                    vim.api.nvim_create_autocmd({"BufEnter"}, {
+                        buffer = output_buffer,
+                        callback = function(info)
+                            if #vim.api.nvim_list_wins() == 1 then
+                                vim.cmd "quit"
+                            end
+                        end,
+                    })
+
+                    -- put focus back on main buffer
+                    if vsplit then
+                        vim.api.nvim_command('wincmd h')
+                    else
+                        vim.api.nvim_command('wincmd k')
+                    end
+
+                    -- TODO update on change
+                    width = vim.api.nvim_win_get_width(output_window)
+                    set_message_margin(width)
                 end
-                vim.api.nvim_set_current_buf(output_buffer)
-                output_window = vim.api.nvim_get_current_win()
-
-                -- make the output buffer automatically quit
-                -- if it's the last buffer
-                vim.api.nvim_create_autocmd({"BufEnter"}, {
-                    buffer = output_buffer,
-                    callback = function(info)
-                        if #vim.api.nvim_list_wins() == 1 then
-                            vim.cmd "quit"
-                        end
-                    end,
-                })
-
-                -- put focus back on main buffer
-                if vsplit then
-                    vim.api.nvim_command('wincmd h')
-                else
-                    vim.api.nvim_command('wincmd k')
-                end
-
-                -- TODO update on change
-                width = vim.api.nvim_win_get_width(output_window)
-                set_message_margin(width)
             end,
             handlers = {
                 ['PIDE/dynamic_output'] = function(err, result, ctx, config)
