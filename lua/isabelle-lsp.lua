@@ -3,6 +3,8 @@ local util = require 'lspconfig.util'
 
 local M = {}
 
+local is_windows = vim.loop.os_uname().version:match 'Windows'
+
 local function send_message(message, payload)
     local clients = vim.lsp.get_active_clients { name = 'isabelle' }
     for _, client in ipairs(clients) do
@@ -19,9 +21,15 @@ local function caret_update(bufnr)
 
     local fname = vim.api.nvim_buf_get_name(bufnr)
     local pos = vim.api.nvim_win_get_cursor(0)
+    -- for some reason windows requires an extra slash here, but I don't know why
+    if is_windows then
+        uri = 'file:///' .. util.path.sanitize(fname)
+    else
+        uri = 'file://' .. util.path.sanitize(fname)
+    end
 
     if fname and pos then
-        send_message('caret_update', { uri = 'file://' .. fname, line = pos[1] - 1, character = pos[2] - 1 })
+        send_message('caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
     end
 end
 
@@ -30,9 +38,15 @@ local function preview_request(bufnr)
 
     local fname = vim.api.nvim_buf_get_name(bufnr)
     local pos = vim.fn.getpos(bufnr)
+    -- for some reason windows requires an extra slash here, but I don't know why
+    if is_windows then
+        uri = 'file:///' .. util.path.sanitize(fname)
+    else
+        uri = 'file://' .. util.path.sanitize(fname)
+    end
 
     if fname and pos then
-        send_message('preview_request', { uri = 'file://' .. fname, column = 1 })
+        send_message('preview_request', { uri = uri, column = 1 })
     end
 end
 
@@ -92,13 +106,15 @@ local function apply_config(isabelle_path, vsplit)
 
     configs.isabelle = {
         default_config = {
+            -- requires isabelle path to look something like this:
+            -- /c/isabelle/isabelle-emacs/bin/isabelle
+            -- then uses msys2 fish to run isabelle, alternatively msys2 bash should also work
+            -- to use WSL instead, replace with bash and add '/mnt' in front of the path
+            -- be aware that WSL will force a bash alias, so getting msys2's bash to work
+            -- when WSL is installed is a little fiddly
             cmd = {
-                isabelle_path, 'vscode_server',
-                '-o', 'vscode_unicode_symbols',
-                '-o', 'vscode_pide_extensions',
-                '-o', 'vscode_html_output=false',
-                -- '-v',
-                -- '-L', '~/Documents/isa.log',
+                'fish', '-c',
+                'cd ' .. util.path.dirname(isabelle_path) .. ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false',
             },
             filetypes = { 'isabelle' },
             root_dir = function(fname)
