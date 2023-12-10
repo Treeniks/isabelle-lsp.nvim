@@ -37,7 +37,6 @@ local function preview_request(bufnr)
     bufnr = util.validate_bufnr(bufnr)
 
     local fname = vim.api.nvim_buf_get_name(bufnr)
-    local pos = vim.fn.getpos(bufnr)
     -- for some reason windows requires an extra slash here, but I don't know why
     if is_windows then
         uri = 'file:///' .. util.path.sanitize(fname)
@@ -45,7 +44,7 @@ local function preview_request(bufnr)
         uri = 'file://' .. util.path.sanitize(fname)
     end
 
-    if fname and pos then
+    if fname then
         send_message('preview_request', { uri = uri, column = 1 })
     end
 end
