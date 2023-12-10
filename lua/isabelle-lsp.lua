@@ -29,9 +29,8 @@ local function preview_request(bufnr)
     bufnr = util.validate_bufnr(bufnr)
 
     local fname = vim.api.nvim_buf_get_name(bufnr)
-    local pos = vim.fn.getpos(bufnr)
 
-    if fname and pos then
+    if fname then
         send_message('preview_request', { uri = 'file://' .. fname, column = 1 })
     end
 end
