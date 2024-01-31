@@ -126,8 +126,6 @@ local function apply_config(isabelle_path, vsplit)
                 return vim.fn.fnamemodify(fname, ':h')
             end,
             single_file_support = true,
-            -- TODO this will create a new lsp instance for every file we open
-            -- which is rather inefficient. Maybe there is a better way?
             on_attach = function(client, bufnr)
                 vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
                     buffer = bufnr,
