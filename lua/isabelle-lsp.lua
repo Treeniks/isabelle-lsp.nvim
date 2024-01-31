@@ -18,10 +18,11 @@ local function caret_update(bufnr)
     bufnr = util.validate_bufnr(bufnr)
 
     local fname = vim.api.nvim_buf_get_name(bufnr)
+    local uri = vim.uri_from_fname(fname)
     local pos = vim.api.nvim_win_get_cursor(0)
 
     if fname and pos then
-        send_message('caret_update', { uri = 'file://' .. fname, line = pos[1] - 1, character = pos[2] - 1 })
+        send_message('caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
     end
 end
 
@@ -29,9 +30,10 @@ local function preview_request(bufnr)
     bufnr = util.validate_bufnr(bufnr)
 
     local fname = vim.api.nvim_buf_get_name(bufnr)
+    local uri = vim.uri_from_fname(fname)
 
     if fname then
-        send_message('preview_request', { uri = 'file://' .. fname, column = 1 })
+        send_message('preview_request', { uri = uri, column = 1 })
     end
 end
 
@@ -47,8 +49,22 @@ local function set_message_margin(size)
     send_message('set_message_margin', { value = size })
 end
 
+local function find_buffer_by_uri(uri)
+    for _, bufnr in ipairs(vim.fn.getbufinfo({ bufloaded = 1 })) do
+        local bufname = vim.fn.bufname(bufnr.bufnr)
+        -- get the full path of the buffer's file
+        -- bufname will typically only be the filename
+        local fname = vim.fn.fnamemodify(bufname, ":p")
+        local bufuri = vim.uri_from_fname(fname)
+
+        if bufuri == uri then
+            return bufnr.bufnr
+        end
+    end
+    return nil
+end
+
 local function apply_config(isabelle_path, vsplit)
-    local thy_buffer
     local output_window
     local output_buffer
 
@@ -89,6 +105,12 @@ local function apply_config(isabelle_path, vsplit)
 
     local hl_group_namespace_map = {}
 
+    -- create namespaces for syntax highlighting
+    for group, _ in pairs(hl_group_map) do
+        local id = vim.api.nvim_create_namespace('isabelle-lsp.' .. group)
+        hl_group_namespace_map[group] = id
+    end
+
     configs.isabelle = {
         default_config = {
             cmd = {
@@ -104,29 +126,19 @@ local function apply_config(isabelle_path, vsplit)
                 return vim.fn.fnamemodify(fname, ':h')
             end,
             single_file_support = true,
+            -- TODO this will create a new lsp instance for every file we open
+            -- which is rather inefficient. Maybe there is a better way?
             on_attach = function(client, bufnr)
-                -- only update the thy buffer if it's the first buffer
-                -- TODO this means that only *one* buffer can be used for the LSP
-                -- but it would be nice to have multiple buffers and the ability to switch between them
-                -- but this is better than it breaking when you open another .thy file
-                if not thy_buffer then
-                    thy_buffer = bufnr
-                end
-
-                -- create namespaces for syntax highlighting
-                for group, _ in pairs(hl_group_map) do
-                    local id = vim.api.nvim_create_namespace('isabelle-lsp.' .. group)
-                    hl_group_namespace_map[group] = id
-                end
-
-                vim.api.nvim_create_autocmd({"CursorMoved","CursorMovedI"}, {
-                    buffer = thy_buffer,
+                vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+                    buffer = bufnr,
                     callback = function(info)
-                        caret_update(thy_buffer)
+                        -- TODO use info instead of grabbing the cursors position through the bufnr
+                        caret_update(bufnr)
                     end,
                 })
 
-                -- TODO see above
+                -- only create output buffer if it doesn't exist yet
+                -- otherwise reuse it
                 if not output_buffer then
                     -- create a new scratch buffer for output & state
                     output_buffer = vim.api.nvim_create_buf(true, true)
@@ -153,7 +165,7 @@ local function apply_config(isabelle_path, vsplit)
 
                     -- make the output buffer automatically quit
                     -- if it's the last buffer
-                    vim.api.nvim_create_autocmd({"BufEnter"}, {
+                    vim.api.nvim_create_autocmd({ "BufEnter" }, {
                         buffer = output_buffer,
                         callback = function(info)
                             if #vim.api.nvim_list_wins() == 1 then
@@ -170,36 +182,40 @@ local function apply_config(isabelle_path, vsplit)
                     end
 
                     -- TODO update on change
-                    width = vim.api.nvim_win_get_width(output_window)
+                    local width = vim.api.nvim_win_get_width(output_window)
                     set_message_margin(width)
                 end
             end,
             handlers = {
                 ['PIDE/dynamic_output'] = function(err, result, ctx, config)
-                    lines = {}
+                    local lines = {}
                     for s in result.content:gmatch("[^\r\n]+") do
                         table.insert(lines, s)
                     end
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, lines)
                 end,
                 ['PIDE/decoration'] = function(err, result, ctx, config)
-                    local decorator = function(hl_group, content, syn_id)
+                    local decorator = function(hl_group, content, syn_id, bufnr)
                         for _, range in ipairs(content) do
                             local start_line = range.range[1]
                             local start_col = range.range[2]
                             local end_line = range.range[3]
                             local end_col = range.range[4]
-                            vim.api.nvim_buf_set_extmark(thy_buffer, syn_id, start_line, start_col, {hl_group = hl_group, end_line=end_line, end_col=end_col})
+                            vim.api.nvim_buf_set_extmark(bufnr, syn_id, start_line, start_col,
+                                { hl_group = hl_group, end_line = end_line, end_col = end_col })
                         end
                     end
 
+                    local thy_buffer = find_buffer_by_uri(result.uri)
 
-                    for _, entry in ipairs(result.entries) do
-                        hl_group = hl_group_map[entry.type]
-                        id = hl_group_namespace_map[entry.type]
-                        if hl_group and id then
-                            vim.api.nvim_buf_clear_namespace(thy_buffer, id, 0, -1)
-                            decorator(hl_group, entry.content, id)
+                    if thy_buffer then
+                        for _, entry in ipairs(result.entries) do
+                            local hl_group = hl_group_map[entry.type]
+                            local id = hl_group_namespace_map[entry.type]
+                            if hl_group and id then
+                                vim.api.nvim_buf_clear_namespace(thy_buffer, id, 0, -1)
+                                decorator(hl_group, entry.content, id, thy_buffer)
+                            end
                         end
                     end
                 end,
@@ -217,19 +233,15 @@ local function apply_config(isabelle_path, vsplit)
                     state_update(-1)
                 end,
             },
-            CaretUpdate = {
-                function()
-                    caret_update(thy_buffer)
-                end,
-            },
-            PreviewRequest = {
-                function()
-                    preview_request(thy_buffer)
-                end,
-            },
+            -- TODO maybe this can be useful
+            -- PreviewRequest = {
+            --     function()
+            --         preview_request(thy_buffer)
+            --     end,
+            -- },
             SetMessageMargin = {
                 function()
-                    width = vim.api.nvim_win_get_width(output_window)
+                    local width = vim.api.nvim_win_get_width(output_window)
                     set_message_margin(width)
                 end
             },
