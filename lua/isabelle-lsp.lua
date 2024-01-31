@@ -199,8 +199,18 @@ local function apply_config(isabelle_path, vsplit)
                             local start_col = range.range[2]
                             local end_line = range.range[3]
                             local end_col = range.range[4]
-                            vim.api.nvim_buf_set_extmark(bufnr, syn_id, start_line, start_col,
+
+                            -- it can happen that one changes the buffer while the LSP sends a decoration message
+                            -- and then the decorations in the message apply to text that was just deleted
+                            -- in which case vim.api.nvim_buf_set_extmark fails
+                            --
+                            -- thus we use pcall to suppress errors if they occur, as they are disrupting and not of importance
+                            local success, _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
                                 { hl_group = hl_group, end_line = end_line, end_col = end_col })
+                            if not success then
+                                -- we do however write a message to the status line just in case
+                                print("Failed to apply decoration")
+                            end
                         end
                     end
 
