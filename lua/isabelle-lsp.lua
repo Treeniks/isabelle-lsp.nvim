@@ -3,6 +3,10 @@ local util = require 'lspconfig.util'
 
 local M = {}
 
+local function get_uri_from_fname(fname)
+    return vim.uri_from_fname(util.path.sanitize(fname))
+end
+
 local function send_message(message, payload)
     local clients = vim.lsp.get_active_clients { name = 'isabelle' }
     for _, client in ipairs(clients) do
@@ -18,10 +22,10 @@ local function caret_update(bufnr)
     bufnr = util.validate_bufnr(bufnr)
 
     local fname = vim.api.nvim_buf_get_name(bufnr)
-    local uri = vim.uri_from_fname(fname)
     local pos = vim.api.nvim_win_get_cursor(0)
 
     if fname and pos then
+        local uri = get_uri_from_fname(fname)
         send_message('caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
     end
 end
@@ -30,9 +34,9 @@ local function preview_request(bufnr)
     bufnr = util.validate_bufnr(bufnr)
 
     local fname = vim.api.nvim_buf_get_name(bufnr)
-    local uri = vim.uri_from_fname(fname)
 
     if fname then
+        local uri = get_uri_from_fname(fname)
         send_message('preview_request', { uri = uri, column = 1 })
     end
 end
@@ -55,7 +59,7 @@ local function find_buffer_by_uri(uri)
         -- get the full path of the buffer's file
         -- bufname will typically only be the filename
         local fname = vim.fn.fnamemodify(bufname, ":p")
-        local bufuri = vim.uri_from_fname(fname)
+        local bufuri = get_uri_from_fname(fname)
 
         if bufuri == uri then
             return bufnr.bufnr
@@ -123,6 +127,11 @@ local function apply_config(isabelle_path, vsplit)
             },
             filetypes = { 'isabelle' },
             root_dir = function(fname)
+                -- TODO we should be searching for a ROOT file here
+                -- and only use this as a fallback
+                -- or better yet: prompt the user like isabelle-emacs does
+                --
+                -- :h gets us the path to the current file's directory
                 return vim.fn.fnamemodify(fname, ':h')
             end,
             single_file_support = true,
