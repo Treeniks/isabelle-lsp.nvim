@@ -7,65 +7,60 @@ local function get_uri_from_fname(fname)
     return vim.uri_from_fname(util.path.sanitize(fname))
 end
 
-local function send_message(message, payload)
-    local clients = vim.lsp.get_active_clients { name = 'isabelle' }
-    for _, client in ipairs(clients) do
-        client.request('PIDE/' .. message, payload, function(err)
-            if err then
-                error(tostring(err))
-            end
-        end, 0)
-    end
-end
-
-local function caret_update(bufnr)
-    bufnr = util.validate_bufnr(bufnr)
-
-    local fname = vim.api.nvim_buf_get_name(bufnr)
-    local pos = vim.api.nvim_win_get_cursor(0)
-
-    if fname and pos then
-        local uri = get_uri_from_fname(fname)
-        send_message('caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
-    end
-end
-
-local function preview_request(bufnr)
-    bufnr = util.validate_bufnr(bufnr)
-
-    local fname = vim.api.nvim_buf_get_name(bufnr)
-
-    if fname then
-        local uri = get_uri_from_fname(fname)
-        send_message('preview_request', { uri = uri, column = 1 })
-    end
-end
-
-local function state_init()
-    send_message('state_init', nil)
-end
-
-local function state_update(id)
-    send_message('state_update', { id = id })
-end
-
-local function set_message_margin(size)
-    send_message('set_message_margin', { value = size })
-end
-
 local function find_buffer_by_uri(uri)
-    for _, bufnr in ipairs(vim.fn.getbufinfo({ bufloaded = 1 })) do
-        local bufname = vim.fn.bufname(bufnr.bufnr)
+    for _, buf in ipairs(vim.fn.getbufinfo({ bufloaded = 1 })) do
+        local bufname = vim.fn.bufname(buf.bufnr)
         -- get the full path of the buffer's file
         -- bufname will typically only be the filename
         local fname = vim.fn.fnamemodify(bufname, ":p")
         local bufuri = get_uri_from_fname(fname)
 
         if bufuri == uri then
-            return bufnr.bufnr
+            return buf.bufnr
         end
     end
     return nil
+end
+
+local function send_message(client, message, payload)
+    client.request('PIDE/' .. message, payload, function(err)
+        if err then
+            error(tostring(err))
+        end
+    end, 0)
+end
+
+local function send_message_to_all(message, payload)
+    local clients = vim.lsp.get_active_clients { name = 'isabelle' }
+    for _, client in ipairs(clients) do
+        send_message(client, message, payload)
+    end
+end
+
+-- assumes `client` is the client associated with the current window's buffer
+local function caret_update(client)
+    local bufnr = vim.api.nvim_get_current_buf()
+    local fname = vim.api.nvim_buf_get_name(bufnr)
+    local uri = get_uri_from_fname(fname)
+
+    local win = vim.api.nvim_get_current_win()
+    local pos = vim.api.nvim_win_get_cursor(win)
+
+    send_message(client, 'caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
+end
+
+-- TODO investigate what this does and how it could be used
+-- local function preview_request(bufnr)
+--     bufnr = util.validate_bufnr(bufnr)
+--
+--     local fname = vim.api.nvim_buf_get_name(bufnr)
+--
+--     local uri = get_uri_from_fname(fname)
+--     send_message('preview_request', { uri = uri, column = 1 })
+-- end
+
+local function set_message_margin(client, size)
+    send_message(client, 'set_message_margin', { value = size })
 end
 
 local function apply_config(isabelle_path, vsplit)
@@ -139,14 +134,13 @@ local function apply_config(isabelle_path, vsplit)
                 vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
                     buffer = bufnr,
                     callback = function(info)
-                        -- TODO use info instead of grabbing the cursors position through the bufnr
-                        caret_update(bufnr)
+                        caret_update(client)
                     end,
                 })
 
                 -- only create output buffer if it doesn't exist yet
                 -- otherwise reuse it
-                if not output_buffer then
+                if not output_window then
                     -- create a new scratch buffer for output & state
                     output_buffer = vim.api.nvim_create_buf(true, true)
                     vim.api.nvim_buf_set_name(output_buffer, "--OUTPUT--")
@@ -159,7 +153,7 @@ local function apply_config(isabelle_path, vsplit)
                     -- set the content of the output buffer
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
 
-                    -- place the output buffer
+                    -- place the output window
                     if vsplit then
                         vim.api.nvim_command('vsplit')
                         vim.api.nvim_command('wincmd l')
@@ -171,7 +165,7 @@ local function apply_config(isabelle_path, vsplit)
                     output_window = vim.api.nvim_get_current_win()
 
                     -- make the output buffer automatically quit
-                    -- if it's the last buffer
+                    -- if it's the last window
                     vim.api.nvim_create_autocmd({ "BufEnter" }, {
                         buffer = output_buffer,
                         callback = function(info)
@@ -218,7 +212,7 @@ local function apply_config(isabelle_path, vsplit)
                                 { hl_group = hl_group, end_line = end_line, end_col = end_col })
                             if not success then
                                 -- we do however write a message to the status line just in case
-                                print("Failed to apply decoration")
+                                vim.notify("Failed to apply decoration")
                             end
                         end
                     end
@@ -232,30 +226,17 @@ local function apply_config(isabelle_path, vsplit)
                             if hl_group and id then
                                 vim.api.nvim_buf_clear_namespace(thy_buffer, id, 0, -1)
                                 decorator(hl_group, entry.content, id, thy_buffer)
+                            else
+                                vim.notify("Could not find hl_group " .. entry.type .. ".")
                             end
                         end
+                    else
+                        vim.notify("Could not find buffer for " .. result.uri .. ".")
                     end
                 end,
             },
         },
         commands = {
-            -- these are just for debug purposes
-            StateInit = {
-                function()
-                    state_init()
-                end,
-            },
-            StateUpdate = {
-                function()
-                    state_update(-1)
-                end,
-            },
-            -- TODO maybe this can be useful
-            -- PreviewRequest = {
-            --     function()
-            --         preview_request(thy_buffer)
-            --     end,
-            -- },
             SetMessageMargin = {
                 function()
                     local width = vim.api.nvim_win_get_width(output_window)
