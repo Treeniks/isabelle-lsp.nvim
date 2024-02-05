@@ -103,3 +103,25 @@ require('isabelle-lsp').setup({
 ### Font
 
 You will need to use a font in your terminal that supports the special symbols of Isabelle. [JuliaMono](https://juliamono.netlify.app) has worked quite well for me.
+
+## Windows
+
+This plugin *can* work on Windows, but it requires a little more setup and can be rather jank. It's also rather slow (it takes ~20 seconds to start the server).
+
+1. The core installation procedure is the same as above.
+2. You'll need some kind of bash-like shell. For this, you can either use [MSYS2](https://www.msys2.org/), [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) or [Cygwin](https://www.cygwin.com/). I'd recommend MSYS2.
+3. You'll need to either have a `sh` binary on PATH, or define a `sh_path` in your config:
+    ```lua
+    require('isabelle-lsp').setup({
+        sh_path = 'C:\\msys64\\usr\\bin\\sh.exe'
+    })
+    ```
+    Note this only has to be *sh-like*. I.e. you can also use `bash` or `fish` if you like, as long as they support a `-c` CLI argument.
+    Note also that WSL forces a `bash` program on PATH, so if you want to use MSYS2's bash and have WSL installed, you will have to specify the full path.
+4. You will need to edit the `isabelle-path` setting to your shell's path translation:
+
+    Instead of using `C:\\isabelle\\...` use
+    - **MSYS2**: `C:/isabelle/...` or `/c/isabelle/...`
+    - **WSL**: `/mnt/c/isabelle/...`
+    - **Cygwin**: `C:/isabelle/...` or `/cygdrive/c/isabelle/...`
+5. Imports will usually give a `Bad theory import` error when opening a file. The only way I found to fix this for now is to just hover the import and do an LSP goto definition or open the imported file manually. After going back, the error will *probably*™ go away.
