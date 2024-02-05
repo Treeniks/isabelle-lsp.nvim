@@ -49,16 +49,6 @@ local function caret_update(client)
     send_message(client, 'caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
 end
 
--- TODO investigate what this does and how it could be used
--- local function preview_request(bufnr)
---     bufnr = util.validate_bufnr(bufnr)
---
---     local fname = vim.api.nvim_buf_get_name(bufnr)
---
---     local uri = get_uri_from_fname(fname)
---     send_message('preview_request', { uri = uri, column = 1 })
--- end
-
 local function set_message_margin(client, size)
     send_message(client, 'set_message_margin', { value = size })
 end
@@ -118,7 +108,7 @@ local function apply_config(isabelle_path, vsplit)
                 '-o', 'vscode_pide_extensions',
                 '-o', 'vscode_html_output=false',
                 -- '-v',
-                -- '-L', '~/Documents/isa.log',
+                -- '-L', '~/Documents/isabelle/isabelle-lsp.log',
             },
             filetypes = { 'isabelle' },
             root_dir = function(fname)
@@ -184,7 +174,7 @@ local function apply_config(isabelle_path, vsplit)
 
                     -- TODO update on change
                     local width = vim.api.nvim_win_get_width(output_window)
-                    set_message_margin(width)
+                    set_message_margin(client, width)
                 end
             end,
             handlers = {
@@ -236,14 +226,7 @@ local function apply_config(isabelle_path, vsplit)
                 end,
             },
         },
-        commands = {
-            SetMessageMargin = {
-                function()
-                    local width = vim.api.nvim_win_get_width(output_window)
-                    set_message_margin(width)
-                end
-            },
-        },
+        commands = {},
         docs = {
             description = [[
 Isabelle VSCode Language Server
