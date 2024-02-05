@@ -55,7 +55,7 @@ local function set_message_margin(client, size)
     send_message(client, 'set_message_margin', { value = size })
 end
 
-local function apply_config(isabelle_path, vsplit)
+local function apply_config(isabelle_path, sh_path, vsplit)
     local output_window
     local output_buffer
 
@@ -106,13 +106,17 @@ local function apply_config(isabelle_path, vsplit)
         default_config = {
             -- requires isabelle path to look something like this:
             -- /c/isabelle/isabelle-emacs/bin/isabelle
-            -- then uses msys2 fish to run isabelle, alternatively msys2 bash should also work
+            -- then uses msys2 sh (or bash/fish alternatively) to run isabelle
             -- to use WSL instead, replace with bash and add '/mnt' in front of the path
             -- be aware that WSL will force a bash alias, so getting msys2's bash to work
-            -- when WSL is installed is a little fiddly
+            -- when WSL is installed requires a full path
             cmd = {
-                'fish', '-c',
+                sh_path, '-c',
                 'cd ' .. util.path.dirname(isabelle_path) .. ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false',
+
+                -- for logging
+                -- it is not possible to set the log file via a full-path for windows because Isabelle refuses ':' in paths...
+                -- 'cd ' .. util.path.dirname(isabelle_path) .. ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false -v -L "isabelle-lsp.log"',
             },
             filetypes = { 'isabelle' },
             root_dir = function(fname)
@@ -245,6 +249,11 @@ M.setup = function(user_config)
         isabelle_path = 'isabelle'
     end
 
+    local sh_path = user_config['sh_path']
+    if not sh_path then
+        sh_path = 'sh'
+    end
+
     local vsplit = user_config['vsplit']
     -- technically not needed
     -- but for transparency
@@ -252,7 +261,7 @@ M.setup = function(user_config)
         vsplit = false
     end
 
-    apply_config(isabelle_path, vsplit)
+    apply_config(isabelle_path, sh_path, vsplit)
 end
 
 return M
