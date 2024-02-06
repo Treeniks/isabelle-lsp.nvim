@@ -263,13 +263,13 @@ M.setup = function(user_config)
             -- '-L', '~/Documents/isabelle/isabelle-lsp.log',
         }
     else -- windows cmd
-        local sh_path = user_config['sh_path']
-        if not sh_path then
-            sh_path = 'sh'
+        local sh = user_config['sh']
+        if not sh then
+            sh = 'sh'
         end
 
         cmd = {
-            sh_path, '-c',
+            sh, '-c',
             'cd ' ..
             util.path.dirname(isabelle_path) ..
             ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false',

@@ -114,18 +114,18 @@ This plugin *can* work on Windows, but it requires a little more setup and can b
     ```lua
     -- for MSYS2's sh
     require('isabelle-lsp').setup({
-        sh_path = 'C:\\msys64\\usr\\bin\\sh.exe'
+        sh = 'C:\\msys64\\usr\\bin\\sh.exe'
     })
 
     -- for WSL's bash
     require('isabelle-lsp').setup({
-        sh_path = 'C:\\Windows\\system32\\bash.exe'
+        sh = 'C:\\Windows\\system32\\bash.exe'
         -- usually just 'bash' is enough as it's typically on PATH
     })
 
     -- for Cygwin, example installed with scoop
     require('isabelle-lsp').setup({
-        sh_path = 'C:\\Users\\USERNAME\\scoop\\apps\\cygwin\\current\\root\\bin\\sh.exe'
+        sh = 'C:\\Users\\USERNAME\\scoop\\apps\\cygwin\\current\\root\\bin\\sh.exe'
     })
     ```
     Note this only has to be *sh-like*. I.e. you can also use `bash` or `fish` if you like, as long as they support a `-c` CLI argument.
