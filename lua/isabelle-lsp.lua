@@ -70,7 +70,7 @@ local function apply_config(config)
         }
     else -- windows cmd
         cmd = {
-            config.sh, '-c',
+            config.sh_path, '-c',
             'cd ' ..
             util.path.dirname(config.isabelle_path) ..
             ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false',
@@ -130,12 +130,6 @@ local function apply_config(config)
 
     configs.isabelle = {
         default_config = {
-            -- requires isabelle path to look something like this:
-            -- /c/isabelle/isabelle-emacs/bin/isabelle
-            -- then uses msys2 sh (or bash/fish alternatively) to run isabelle
-            -- to use WSL instead, replace with bash and add '/mnt' in front of the path
-            -- be aware that WSL will force a bash alias, so getting msys2's bash to work
-            -- when WSL is installed requires a full path
             cmd = cmd,
             filetypes = { 'isabelle' },
             root_dir = function(fname)
@@ -275,7 +269,7 @@ end
 local default_config = {
     isabelle_path = 'isabelle',
     vsplit = false,
-    sh = 'sh', -- only relevant for Windows
+    sh_path = 'sh', -- only relevant for Windows
 }
 
 M.setup = function(user_config)
