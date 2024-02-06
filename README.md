@@ -112,8 +112,20 @@ This plugin *can* work on Windows, but it requires a little more setup and can b
 2. You'll need some kind of bash-like shell. For this, you can either use [MSYS2](https://www.msys2.org/), [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) or [Cygwin](https://www.cygwin.com/). I'd recommend MSYS2.
 3. You'll need to either have a `sh` binary on PATH, or define a `sh_path` in your config:
     ```lua
+    -- for MSYS2's sh
     require('isabelle-lsp').setup({
         sh_path = 'C:\\msys64\\usr\\bin\\sh.exe'
+    })
+
+    -- for WSL's bash
+    require('isabelle-lsp').setup({
+        sh_path = 'C:\\Windows\\system32\\bash.exe'
+        -- usually just 'bash' is enough as it's typically on PATH
+    })
+
+    -- for Cygwin, example installed with scoop
+    require('isabelle-lsp').setup({
+        sh_path = 'C:\\Users\\USERNAME\\scoop\\apps\\cygwin\\current\\root\\bin\\sh.exe'
     })
     ```
     Note this only has to be *sh-like*. I.e. you can also use `bash` or `fish` if you like, as long as they support a `-c` CLI argument.
