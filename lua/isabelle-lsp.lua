@@ -55,7 +55,32 @@ local function set_message_margin(client, size)
     send_message(client, 'set_message_margin', { value = size })
 end
 
-local function apply_config(cmd, vsplit)
+local function apply_config(config)
+    local cmd
+    if not is_windows then
+        cmd = {
+            config.isabelle_path, 'vscode_server',
+            '-o', 'vscode_unicode_symbols',
+            '-o', 'vscode_pide_extensions',
+            '-o', 'vscode_html_output=false',
+
+            -- for logging
+            -- '-v',
+            -- '-L', '~/Documents/isabelle/isabelle-lsp.log',
+        }
+    else -- windows cmd
+        cmd = {
+            config.sh, '-c',
+            'cd ' ..
+            util.path.dirname(config.isabelle_path) ..
+            ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false',
+
+            -- for logging
+            -- it is not possible to set the log file via a full-path for windows because Isabelle refuses ':' in paths...
+            -- 'cd ' .. util.path.dirname(isabelle_path) .. ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false -v -L "isabelle-lsp.log"',
+        }
+    end
+
     local output_window
     local output_buffer
 
@@ -145,7 +170,7 @@ local function apply_config(cmd, vsplit)
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
 
                     -- place the output window
-                    if vsplit then
+                    if config.vsplit then
                         vim.api.nvim_command('vsplit')
                         vim.api.nvim_command('wincmd l')
                     else
@@ -167,7 +192,7 @@ local function apply_config(cmd, vsplit)
                     })
 
                     -- put focus back on main buffer
-                    if vsplit then
+                    if config.vsplit then
                         vim.api.nvim_command('wincmd h')
                     else
                         vim.api.nvim_command('wincmd k')
@@ -236,51 +261,18 @@ Isabelle VSCode Language Server
     }
 end
 
+local default_config = {
+    isabelle_path = 'isabelle',
+    vsplit = false,
+    sh = 'sh', -- only relevant for Windows
+}
+
 M.setup = function(user_config)
-    local isabelle_path = user_config['isabelle_path']
-    if not isabelle_path then
-        isabelle_path = 'isabelle'
-    end
+    -- use default_config instead of returning nil if a config value is not set in user_config
+    local mt = { __index = function(_, k) return default_config[k] end }
+    setmetatable(user_config, mt)
 
-    local vsplit = user_config['vsplit']
-    -- technically not needed
-    -- but for transparency
-    if not vsplit then
-        vsplit = false
-    end
-
-    local cmd
-
-    if not is_windows then
-        cmd = {
-            isabelle_path, 'vscode_server',
-            '-o', 'vscode_unicode_symbols',
-            '-o', 'vscode_pide_extensions',
-            '-o', 'vscode_html_output=false',
-
-            -- for logging
-            -- '-v',
-            -- '-L', '~/Documents/isabelle/isabelle-lsp.log',
-        }
-    else -- windows cmd
-        local sh = user_config['sh']
-        if not sh then
-            sh = 'sh'
-        end
-
-        cmd = {
-            sh, '-c',
-            'cd ' ..
-            util.path.dirname(isabelle_path) ..
-            ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false',
-
-            -- for logging
-            -- it is not possible to set the log file via a full-path for windows because Isabelle refuses ':' in paths...
-            -- 'cd ' .. util.path.dirname(isabelle_path) .. ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false -v -L "isabelle-lsp.log"',
-        }
-    end
-
-    apply_config(cmd, vsplit)
+    apply_config(user_config)
 end
 
 return M
