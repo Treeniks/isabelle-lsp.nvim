@@ -63,6 +63,7 @@ local function apply_config(config)
             '-o', 'vscode_unicode_symbols',
             '-o', 'vscode_pide_extensions',
             '-o', 'vscode_html_output=false',
+            '-o', 'editor_output_state',
 
             -- for logging
             -- '-v',
@@ -73,7 +74,7 @@ local function apply_config(config)
             config.sh_path, '-c',
             'cd ' ..
             util.path.dirname(config.isabelle_path) ..
-            ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false',
+            ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false -o editor_output_state',
 
             -- for logging
             -- it is not possible to set the log file via a full-path for windows because Isabelle refuses ':' in paths...
