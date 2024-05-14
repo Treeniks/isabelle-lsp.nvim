@@ -162,7 +162,7 @@ local function apply_config(config)
                     vim.api.nvim_buf_set_option(output_buffer, 'bufhidden', 'hide')
                     vim.api.nvim_buf_set_option(output_buffer, 'swapfile', false)
                     vim.api.nvim_buf_set_option(output_buffer, 'buflisted', false)
-                    vim.api.nvim_buf_set_option(output_buffer, 'filetype', 'scratch-output')
+                    vim.api.nvim_buf_set_option(output_buffer, 'filetype', 'isabelle_output')
 
                     -- set the content of the output buffer
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
