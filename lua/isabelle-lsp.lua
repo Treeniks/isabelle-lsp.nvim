@@ -202,7 +202,8 @@ local function apply_config(config)
             handlers = {
                 ['PIDE/dynamic_output'] = function(err, result, ctx, config)
                     local lines = {}
-                    for s in result.content:gmatch("[^\r\n]+") do
+                    -- this regex makes sure that empty lines are still kept
+                    for s in result.content:gmatch("([^\r\n]*)\n?") do
                         table.insert(lines, s)
                     end
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, lines)
