@@ -56,6 +56,90 @@ local function set_message_margin(client, size)
     send_message(client, 'set_message_margin', { value = size - 8 })
 end
 
+-- setting false means "don't do any highlighting for this group"
+local hl_group_map = {
+    ['background_unprocessed1'] = false,
+    ['background_running1'] = false,
+    ['background_canceled'] = false,
+    ['background_bad'] = false,
+    ['background_intensify'] = false,
+    ['background_markdown_bullet1'] = 'markdownH1',
+    ['background_markdown_bullet2'] = 'markdownH2',
+    ['background_markdown_bullet3'] = 'markdownH3',
+    ['background_markdown_bullet4'] = 'markdownH4',
+    ['foreground_quoted'] = false,
+    ['text_main'] = 'Normal',
+    ['text_quasi_keyword'] = 'Keyword',
+    ['text_free'] = 'Function',
+    ['text_bound'] = 'Identifier',
+    ['text_inner_numeral'] = false,
+    ['text_inner_quoted'] = 'String',
+    ['text_comment1'] = 'Comment',
+    ['text_comment2'] = false, -- seems to not exist in the LSP
+    ['text_comment3'] = false,
+    ['text_dynamic'] = false,
+    ['text_class_parameter'] = false,
+    ['text_antiquote'] = 'Comment',
+    ['text_raw_text'] = 'Comment',
+    ['text_plain_text'] = 'String',
+    ['text_overview_unprocessed'] = false,
+    ['text_overview_running'] = 'Todo',
+    ['text_overview_error'] = false,
+    ['text_overview_warning'] = false,
+    ['dotted_writeln'] = false,
+    ['dotted_warning'] = "DiagnosticWarn",
+    ['dotted_information'] = false,
+    ['spell_checker'] = 'Underlined',
+    -- currently unused by isabelle-emacs
+    -- but will probably be used once my Language Server chages get merged into Isabelle
+    ['text_inner_cartouche'] = false,
+    ['text_var'] = 'Function',
+    ['text_skolem'] = 'Identifier',
+    ['text_tvar'] = 'Type',
+    ['text_tfree'] = 'Type',
+    ['text_operator'] = 'Function',
+    ['text_improper'] = 'Keyword',
+    ['text_keyword3'] = 'Keyword',
+    ['text_keyword2'] = 'Keyword',
+    ['text_keyword1'] = 'Keyword',
+    ['foreground_antiquoted'] = false,
+}
+
+local hl_group_namespace_map = {}
+-- create namespaces for syntax highlighting
+for group, _ in pairs(hl_group_map) do
+    local id = vim.api.nvim_create_namespace('isabelle-lsp.' .. group)
+    hl_group_namespace_map[group] = id
+end
+
+-- range has the following format:
+-- {start_line, start_column, end_line, end_column}
+-- where all values are character indexes, not byte indexes
+local function apply_decoration(bufnr, hl_group, syn_id, range)
+    local start_line = range[1]
+    local start_col = range[2]
+    local end_line = range[3]
+    local end_col = range[4]
+
+    -- convert indexes to byte indexes
+    local sline = vim.api.nvim_buf_get_lines(bufnr, start_line, start_line + 1, false)[1]
+    start_col = vim.fn.byteidx(sline, start_col)
+    local eline = vim.api.nvim_buf_get_lines(bufnr, end_line, end_line + 1, false)[1]
+    end_col = vim.fn.byteidx(eline, end_col)
+
+    -- it can happen that one changes the buffer while the LSP sends a decoration message
+    -- and then the decorations in the message apply to text that was just deleted
+    -- in which case vim.api.nvim_buf_set_extmark fails
+    --
+    -- thus we use pcall to suppress errors if they occur, as they are disrupting and not of importance
+    local success, _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
+        { hl_group = hl_group, end_line = end_line, end_col = end_col })
+    if not success then
+        -- we do however write a message to the status line just in case
+        vim.notify("Failed to apply decoration.")
+    end
+end
+
 local function apply_config(config)
     local cmd
     if not is_windows then
@@ -86,50 +170,6 @@ local function apply_config(config)
     local output_window
     local output_buffer
     local prev_output_width
-
-    -- setting false means "don't do any highlighting for this group"
-    local hl_group_map = {
-        ['background_unprocessed1'] = false,
-        ['background_running1'] = false,
-        ['background_canceled'] = false,
-        ['background_bad'] = false,
-        ['background_intensify'] = false,
-        ['background_markdown_bullet1'] = 'markdownH1',
-        ['background_markdown_bullet2'] = 'markdownH2',
-        ['background_markdown_bullet3'] = 'markdownH3',
-        ['background_markdown_bullet4'] = 'markdownH4',
-        ['foreground_quoted'] = false,
-        ['text_main'] = 'Normal',
-        ['text_quasi_keyword'] = 'Keyword',
-        ['text_free'] = 'Function',
-        ['text_bound'] = 'Identifier',
-        ['text_inner_numeral'] = false,
-        ['text_inner_quoted'] = 'String',
-        ['text_comment1'] = 'Comment',
-        ['text_comment2'] = false, -- seems to not exist in the LSP
-        ['text_comment3'] = false,
-        ['text_dynamic'] = false,
-        ['text_class_parameter'] = false,
-        ['text_antiquote'] = 'Comment',
-        ['text_raw_text'] = 'Comment',
-        ['text_plain_text'] = 'String',
-        ['text_overview_unprocessed'] = false,
-        ['text_overview_running'] = 'Todo',
-        ['text_overview_error'] = false,
-        ['text_overview_warning'] = false,
-        ['dotted_writeln'] = false,
-        ['dotted_warning'] = "DiagnosticWarn",
-        ['dotted_information'] = false,
-        ['spell_checker'] = 'Underlined',
-    }
-
-    local hl_group_namespace_map = {}
-
-    -- create namespaces for syntax highlighting
-    for group, _ in pairs(hl_group_map) do
-        local id = vim.api.nvim_create_namespace('isabelle-lsp.' .. group)
-        hl_group_namespace_map[group] = id
-    end
 
     configs.isabelle = {
         default_config = {
@@ -223,33 +263,6 @@ local function apply_config(config)
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, lines)
                 end,
                 ['PIDE/decoration'] = function(err, result, ctx, config)
-                    local decorator = function(hl_group, content, syn_id, bufnr)
-                        for _, range in ipairs(content) do
-                            local start_line = range.range[1]
-                            local start_col = range.range[2]
-                            local end_line = range.range[3]
-                            local end_col = range.range[4]
-
-                            -- convert indexes to byte indexes
-                            local sline = vim.api.nvim_buf_get_lines(bufnr, start_line, start_line + 1, false)[1]
-                            start_col = vim.fn.byteidx(sline, start_col)
-                            local eline = vim.api.nvim_buf_get_lines(bufnr, end_line, end_line + 1, false)[1]
-                            end_col = vim.fn.byteidx(eline, end_col)
-
-                            -- it can happen that one changes the buffer while the LSP sends a decoration message
-                            -- and then the decorations in the message apply to text that was just deleted
-                            -- in which case vim.api.nvim_buf_set_extmark fails
-                            --
-                            -- thus we use pcall to suppress errors if they occur, as they are disrupting and not of importance
-                            local success, _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
-                                { hl_group = hl_group, end_line = end_line, end_col = end_col })
-                            if not success then
-                                -- we do however write a message to the status line just in case
-                                vim.notify("Failed to apply decoration")
-                            end
-                        end
-                    end
-
                     local thy_buffer = find_buffer_by_uri(result.uri)
 
                     if not thy_buffer then
@@ -258,11 +271,11 @@ local function apply_config(config)
                     end
 
                     for _, entry in ipairs(result.entries) do
-                        local id = hl_group_namespace_map[entry.type]
+                        local syn_id = hl_group_namespace_map[entry.type]
                         local hl_group = hl_group_map[entry.type]
 
                         -- if id is nil, it means the hl_group_map doesn't know about this group
-                        if not id then
+                        if not syn_id then
                             -- in particular, hl_group is nil here too
                             vim.notify("Could not find hl_group " .. entry.type .. ".")
                             goto continue
@@ -271,8 +284,10 @@ local function apply_config(config)
                         -- if hl_group is false, it just means there is no highlighting done for this group
                         if not hl_group then goto continue end
 
-                        vim.api.nvim_buf_clear_namespace(thy_buffer, id, 0, -1)
-                        decorator(hl_group, entry.content, id, thy_buffer)
+                        vim.api.nvim_buf_clear_namespace(thy_buffer, syn_id, 0, -1)
+                        for _, range in ipairs(entry.content) do
+                            apply_decoration(thy_buffer, hl_group, syn_id, range.range)
+                        end
 
                         ::continue::
                     end
