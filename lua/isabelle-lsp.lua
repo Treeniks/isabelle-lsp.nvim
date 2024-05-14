@@ -214,6 +214,12 @@ local function apply_config(config)
                             local end_line = range.range[3]
                             local end_col = range.range[4]
 
+                            -- convert indexes to byte indexes
+                            local sline = vim.api.nvim_buf_get_lines(bufnr, start_line, start_line + 1, false)[1]
+                            start_col = vim.fn.byteidx(sline, start_col)
+                            local eline = vim.api.nvim_buf_get_lines(bufnr, end_line, end_line + 1, false)[1]
+                            end_col = vim.fn.byteidx(eline, end_col)
+
                             -- it can happen that one changes the buffer while the LSP sends a decoration message
                             -- and then the decorations in the message apply to text that was just deleted
                             -- in which case vim.api.nvim_buf_set_extmark fails
