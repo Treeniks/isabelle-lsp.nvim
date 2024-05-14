@@ -52,7 +52,8 @@ local function caret_update(client)
 end
 
 local function set_message_margin(client, size)
-    send_message(client, 'set_message_margin', { value = size })
+    -- the `- 8` is for some headroom
+    send_message(client, 'set_message_margin', { value = size - 8 })
 end
 
 local function apply_config(config)
@@ -84,6 +85,7 @@ local function apply_config(config)
 
     local output_window
     local output_buffer
+    local prev_output_width
 
     -- setting false means "don't do any highlighting for this group"
     local hl_group_map = {
@@ -194,10 +196,22 @@ local function apply_config(config)
                         vim.api.nvim_command('wincmd k')
                     end
 
-                    -- TODO update on change
-                    local width = vim.api.nvim_win_get_width(output_window)
-                    set_message_margin(client, width)
+                    prev_output_width = vim.api.nvim_win_get_width(output_window)
+                    set_message_margin(client, prev_output_width)
                 end
+
+                -- handle resizes of output window
+                vim.api.nvim_create_autocmd('WinResized', {
+                    callback = function(info)
+                        if info.buf ~= output_buffer and info.buf ~= bufnr then return end
+
+                        local new_output_width = vim.api.nvim_win_get_width(output_window)
+                        if new_output_width ~= prev_output_width then
+                            prev_output_width = new_output_width
+                            set_message_margin(client, prev_output_width)
+                        end
+                    end,
+                })
             end,
             handlers = {
                 ['PIDE/dynamic_output'] = function(err, result, ctx, config)
