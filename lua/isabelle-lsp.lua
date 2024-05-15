@@ -51,9 +51,9 @@ local function caret_update(client)
     send_notification(client, 'caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
 end
 
-local function set_message_margin(client, size)
+local function set_output_margin(client, size)
     -- the `- 8` is for some headroom
-    send_notification(client, 'set_message_margin', { value = size - 8 })
+    send_notification(client, 'output_set_margin', { value = size - 8 })
 end
 
 -- setting false means "don't do any highlighting for this group"
@@ -111,6 +111,8 @@ for group, _ in pairs(hl_group_map) do
     local id = vim.api.nvim_create_namespace('isabelle-lsp.' .. group)
     hl_group_namespace_map[group] = id
 end
+
+local output_namespace = vim.api.nvim_create_namespace('isabelle-lsp.dynamic_output')
 
 -- range has the following format:
 -- {start_line, start_column, end_line, end_column}
@@ -247,7 +249,7 @@ local function apply_config(config)
                     end
 
                     prev_output_width = vim.api.nvim_win_get_width(output_window)
-                    set_message_margin(client, prev_output_width)
+                    set_output_margin(client, prev_output_width)
                 end
 
                 -- handle resizes of output window
@@ -258,7 +260,7 @@ local function apply_config(config)
                         local new_output_width = vim.api.nvim_win_get_width(output_window)
                         if new_output_width ~= prev_output_width then
                             prev_output_width = new_output_width
-                            set_message_margin(client, prev_output_width)
+                            set_output_margin(client, prev_output_width)
                         end
                     end,
                 })
@@ -271,6 +273,27 @@ local function apply_config(config)
                         table.insert(lines, s)
                     end
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, lines)
+
+                    -- clear all decorations
+                    vim.api.nvim_buf_clear_namespace(output_buffer, output_namespace, 0, -1)
+
+                    for _, dec in ipairs(params.decorations) do
+                        local hl_group = hl_group_map[dec.type]
+
+                        -- if hl_group is nil, it means the hl_group_map doesn't know about this group
+                        if hl_group == nil then
+                            -- in particular, hl_group is nil here too
+                            vim.notify("Could not find hl_group " .. dec.type .. ".")
+                            goto continue
+                        end
+
+                        -- if hl_group is false, it just means there is no highlighting done for this group
+                        if hl_group == false then goto continue end
+
+                        apply_decoration(output_buffer, hl_group, output_namespace, dec.range)
+
+                        ::continue::
+                    end
                 end,
                 ['PIDE/decoration'] = function(err, params, ctx, config)
                     local thy_buffer = find_buffer_by_uri(params.uri)
