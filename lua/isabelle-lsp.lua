@@ -24,18 +24,18 @@ local function find_buffer_by_uri(uri)
     return nil
 end
 
-local function send_notification(client, message, payload)
-    client.request('PIDE/' .. message, payload, function(err)
+local function send_notification(client, method, payload)
+    client.request('PIDE/' .. method, payload, function(err)
         if err then
             error(tostring(err))
         end
     end, 0)
 end
 
-local function send_notification_to_all(message, payload)
+local function send_notification_to_all(method, payload)
     local clients = vim.lsp.get_active_clients { name = 'isabelle' }
     for _, client in ipairs(clients) do
-        send_notification(client, message, payload)
+        send_notification(client, method, payload)
     end
 end
 
