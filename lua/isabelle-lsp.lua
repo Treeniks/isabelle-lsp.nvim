@@ -161,7 +161,7 @@ local function apply_config(config)
     else -- windows cmd
         local unicode_option = ''
         if config.unicode_symbols then
-            unicode_option = '-o vscode_unicode_symbols'
+            unicode_option = ' -o vscode_unicode_symbols'
         end
 
         cmd = {
@@ -264,23 +264,23 @@ local function apply_config(config)
                 })
             end,
             handlers = {
-                ['PIDE/dynamic_output'] = function(err, result, ctx, config)
+                ['PIDE/dynamic_output'] = function(err, params, ctx, config)
                     local lines = {}
                     -- this regex makes sure that empty lines are still kept
-                    for s in result.content:gmatch("([^\r\n]*)\n?") do
+                    for s in params.content:gmatch("([^\r\n]*)\n?") do
                         table.insert(lines, s)
                     end
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, lines)
                 end,
-                ['PIDE/decoration'] = function(err, result, ctx, config)
-                    local thy_buffer = find_buffer_by_uri(result.uri)
+                ['PIDE/decoration'] = function(err, params, ctx, config)
+                    local thy_buffer = find_buffer_by_uri(params.uri)
 
                     if not thy_buffer then
-                        vim.notify("Could not find buffer for " .. result.uri .. ".")
+                        vim.notify("Could not find buffer for " .. params.uri .. ".")
                         return
                     end
 
-                    for _, entry in ipairs(result.entries) do
+                    for _, entry in ipairs(params.entries) do
                         local syn_id = hl_group_namespace_map[entry.type]
                         local hl_group = hl_group_map[entry.type]
 
