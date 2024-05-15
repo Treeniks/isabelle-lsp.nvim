@@ -290,7 +290,9 @@ local function apply_config(config)
                         -- if hl_group is false, it just means there is no highlighting done for this group
                         if hl_group == false then goto continue end
 
-                        apply_decoration(output_buffer, hl_group, output_namespace, dec.range)
+                        for _, range in ipairs(dec.content) do
+                            apply_decoration(output_buffer, hl_group, output_namespace, range.range)
+                        end
 
                         ::continue::
                     end
