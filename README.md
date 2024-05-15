@@ -100,6 +100,15 @@ require('isabelle-lsp').setup({
 })
 ```
 
+### Unicode Symbols
+
+By default, symbols like `⟹` will be shown with their ascii representation (`\<Longrightarrow>`) within the output panel. If you want unicode symbols instead, you can set it so in the setup:
+```lua
+require('isabelle-lsp').setup({
+    unicode_symbols = true,
+})
+```
+
 ### Font
 
 You will need to use a font in your terminal that supports the special symbols of Isabelle. [JuliaMono](https://juliamono.netlify.app) has worked quite well for me.
