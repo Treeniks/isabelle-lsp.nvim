@@ -304,7 +304,19 @@ local function apply_config(config)
                 end,
             },
         },
-        commands = {},
+        commands = {
+            StateInit = {
+                function()
+                    send_message_to_all("state_init", {})
+                end,
+            },
+            SymbolsRequest = {
+                function()
+                    send_message_to_all("symbols_request", {})
+                end,
+            },
+
+        },
         docs = {
             description = [[
 Isabelle VSCode Language Server
