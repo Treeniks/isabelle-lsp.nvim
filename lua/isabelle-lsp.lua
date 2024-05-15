@@ -24,7 +24,7 @@ local function find_buffer_by_uri(uri)
     return nil
 end
 
-local function send_message(client, message, payload)
+local function send_notification(client, message, payload)
     client.request('PIDE/' .. message, payload, function(err)
         if err then
             error(tostring(err))
@@ -32,10 +32,10 @@ local function send_message(client, message, payload)
     end, 0)
 end
 
-local function send_message_to_all(message, payload)
+local function send_notification_to_all(message, payload)
     local clients = vim.lsp.get_active_clients { name = 'isabelle' }
     for _, client in ipairs(clients) do
-        send_message(client, message, payload)
+        send_notification(client, message, payload)
     end
 end
 
@@ -48,12 +48,12 @@ local function caret_update(client)
     local win = vim.api.nvim_get_current_win()
     local pos = vim.api.nvim_win_get_cursor(win)
 
-    send_message(client, 'caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
+    send_notification(client, 'caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
 end
 
 local function set_message_margin(client, size)
     -- the `- 8` is for some headroom
-    send_message(client, 'set_message_margin', { value = size - 8 })
+    send_notification(client, 'set_message_margin', { value = size - 8 })
 end
 
 -- setting false means "don't do any highlighting for this group"
