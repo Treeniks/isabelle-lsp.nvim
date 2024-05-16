@@ -24,12 +24,18 @@ local function find_buffer_by_uri(uri)
     return nil
 end
 
-local function send_notification(client, method, payload)
-    client.request('PIDE/' .. method, payload, function(err)
+local function send_request(client, method, payload, callback)
+    client.request('PIDE/' .. method, payload, function(err, result)
         if err then
             error(tostring(err))
         end
+
+        callback(result)
     end, 0)
+end
+
+local function send_notification(client, method, payload)
+    send_request(client, method, payload, function(_) end)
 end
 
 local function send_notification_to_all(method, payload)
@@ -53,7 +59,12 @@ end
 
 local function set_output_margin(client, size)
     -- the `- 8` is for some headroom
-    send_notification(client, 'output_set_margin', { value = size - 8 })
+    send_notification(client, 'output_set_margin', { margin = size - 8 })
+end
+
+local function set_state_margin(client, id, size)
+    -- the `- 8` is for some headroom
+    send_notification(client, 'state_set_margin', { id = id, margin = size - 8 })
 end
 
 -- setting false means "don't do any highlighting for this group"
@@ -152,8 +163,8 @@ local function apply_config(config)
             '-o', 'editor_output_state',
 
             -- for logging
-            -- '-v',
-            -- '-L', '~/Documents/isabelle/isabelle-lsp.log',
+            '-v',
+            '-L', '~/Documents/isabelle/isabelle-lsp.log',
         }
 
         if config.unicode_symbols then
@@ -183,6 +194,12 @@ local function apply_config(config)
     local output_buffer
     local prev_output_width
 
+    local thy_buffer
+
+    local state_window
+    -- there can be multiple state buffers
+    local state_buffers = {}
+
     configs.isabelle = {
         default_config = {
             cmd = cmd,
@@ -197,6 +214,8 @@ local function apply_config(config)
             end,
             single_file_support = true,
             on_attach = function(client, bufnr)
+                thy_buffer = bufnr
+
                 vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
                     buffer = bufnr,
                     callback = function(info)
@@ -298,9 +317,9 @@ local function apply_config(config)
                     end
                 end,
                 ['PIDE/decoration'] = function(err, params, ctx, config)
-                    local thy_buffer = find_buffer_by_uri(params.uri)
+                    local bufnr = find_buffer_by_uri(params.uri)
 
-                    if not thy_buffer then
+                    if not bufnr then
                         vim.notify("Could not find buffer for " .. params.uri .. ".")
                         return
                     end
@@ -319,9 +338,43 @@ local function apply_config(config)
                         -- if hl_group is false, it just means there is no highlighting done for this group
                         if not hl_group then goto continue end
 
-                        vim.api.nvim_buf_clear_namespace(thy_buffer, syn_id, 0, -1)
+                        vim.api.nvim_buf_clear_namespace(bufnr, syn_id, 0, -1)
                         for _, range in ipairs(entry.content) do
-                            apply_decoration(thy_buffer, hl_group, syn_id, range.range)
+                            apply_decoration(bufnr, hl_group, syn_id, range.range)
+                        end
+
+                        ::continue::
+                    end
+                end,
+                ['PIDE/state_output'] = function(err, params, ctx, config)
+                    local id = params.id
+                    local buf = state_buffers[id]
+
+                    local lines = {}
+                    -- this regex makes sure that empty lines are still kept
+                    for s in params.content:gmatch("([^\r\n]*)\n?") do
+                        table.insert(lines, s)
+                    end
+                    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+                    -- clear all decorations
+                    vim.api.nvim_buf_clear_namespace(buf, output_namespace, 0, -1)
+
+                    for _, dec in ipairs(params.decorations) do
+                        local hl_group = hl_group_map[dec.type]
+
+                        -- if hl_group is nil, it means the hl_group_map doesn't know about this group
+                        if hl_group == nil then
+                            -- in particular, hl_group is nil here too
+                            vim.notify("Could not find hl_group " .. dec.type .. ".")
+                            goto continue
+                        end
+
+                        -- if hl_group is false, it just means there is no highlighting done for this group
+                        if hl_group == false then goto continue end
+
+                        for _, range in ipairs(dec.content) do
+                            apply_decoration(buf, hl_group, output_namespace, range.range)
                         end
 
                         ::continue::
@@ -332,12 +385,62 @@ local function apply_config(config)
         commands = {
             StateInit = {
                 function()
-                    send_message_to_all("state_init", {})
+                    local clients = vim.lsp.get_active_clients { bufnr = thy_buffer, name = 'isabelle' }
+
+                    for _, client in ipairs(clients) do
+                        send_request(client, 'state_init', {}, function(result)
+                            local id = result.state_id
+
+                            local prev_width
+
+                            local new_buf = vim.api.nvim_create_buf(true, true)
+                            vim.api.nvim_buf_set_name(new_buf, "--STATE-- " .. id)
+                            vim.api.nvim_buf_set_option(new_buf, 'buftype', 'nofile')
+                            vim.api.nvim_buf_set_option(new_buf, 'bufhidden', 'hide')
+                            vim.api.nvim_buf_set_option(new_buf, 'swapfile', false)
+                            vim.api.nvim_buf_set_option(new_buf, 'buflisted', false)
+                            vim.api.nvim_buf_set_option(new_buf, 'filetype', 'isabelle_output')
+
+                            vim.api.nvim_buf_set_lines(new_buf, 0, -1, false, {})
+
+                            -- only create a state window if it doesn't exist yet
+                            -- otherwise reuse it
+                            if not state_window then
+                                -- place the state window
+                                vim.api.nvim_command('vsplit')
+                                vim.api.nvim_command('wincmd l')
+
+                                vim.api.nvim_set_current_buf(new_buf)
+                                state_window = vim.api.nvim_get_current_win()
+
+                                -- put focus back on main buffer
+                                vim.api.nvim_command('wincmd h')
+
+                                prev_width = vim.api.nvim_win_get_width(state_window)
+                                set_state_margin(client, id, prev_width)
+                            end
+
+                            -- handle resizes of output window
+                            vim.api.nvim_create_autocmd('WinResized', {
+                                callback = function(info)
+                                    if info.buf ~= new_buf and info.buf ~= thy_buffer then return end
+
+                                    local new_width = vim.api.nvim_win_get_width(state_window)
+                                    if new_width ~= prev_width then
+                                        prev_width = new_width
+                                        set_state_margin(client, id, prev_width)
+                                    end
+                                end,
+                            })
+
+                            state_buffers[id] = new_buf
+                        end)
+                    end
                 end,
             },
             SymbolsRequest = {
                 function()
-                    send_message_to_all("symbols_request", {})
+                    send_notification_to_all("symbols_request", {})
                 end,
             },
 
