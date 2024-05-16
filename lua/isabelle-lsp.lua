@@ -125,31 +125,33 @@ end
 
 local output_namespace = vim.api.nvim_create_namespace('isabelle-lsp.dynamic_output')
 
--- range has the following format:
--- {start_line, start_column, end_line, end_column}
--- where all values are character indexes, not byte indexes
-local function apply_decoration(bufnr, hl_group, syn_id, range)
-    local start_line = range[1]
-    local start_col = range[2]
-    local end_line = range[3]
-    local end_col = range[4]
+local function apply_decoration(bufnr, hl_group, syn_id, content)
+    for _, range in ipairs(content) do
+        -- range.range has the following format:
+        -- {start_line, start_column, end_line, end_column}
+        -- where all values are character indexes, not byte indexes
+        local start_line = range.range[1]
+        local start_col = range.range[2]
+        local end_line = range.range[3]
+        local end_col = range.range[4]
 
-    -- convert indexes to byte indexes
-    local sline = vim.api.nvim_buf_get_lines(bufnr, start_line, start_line + 1, false)[1]
-    start_col = vim.fn.byteidx(sline, start_col)
-    local eline = vim.api.nvim_buf_get_lines(bufnr, end_line, end_line + 1, false)[1]
-    end_col = vim.fn.byteidx(eline, end_col)
+        -- convert indexes to byte indexes
+        local sline = vim.api.nvim_buf_get_lines(bufnr, start_line, start_line + 1, false)[1]
+        start_col = vim.fn.byteidx(sline, start_col)
+        local eline = vim.api.nvim_buf_get_lines(bufnr, end_line, end_line + 1, false)[1]
+        end_col = vim.fn.byteidx(eline, end_col)
 
-    -- it can happen that one changes the buffer while the LSP sends a decoration message
-    -- and then the decorations in the message apply to text that was just deleted
-    -- in which case vim.api.nvim_buf_set_extmark fails
-    --
-    -- thus we use pcall to suppress errors if they occur, as they are disrupting and not of importance
-    local success, _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
-        { hl_group = hl_group, end_line = end_line, end_col = end_col })
-    if not success then
-        -- we do however write a message to the status line just in case
-        vim.notify("Failed to apply decoration.")
+        -- it can happen that one changes the buffer while the LSP sends a decoration message
+        -- and then the decorations in the message apply to text that was just deleted
+        -- in which case vim.api.nvim_buf_set_extmark fails
+        --
+        -- thus we use pcall to suppress errors if they occur, as they are disrupting and not of importance
+        local success, _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
+            { hl_group = hl_group, end_line = end_line, end_col = end_col })
+        if not success then
+            -- we do however write a message to the status line just in case
+            vim.notify("Failed to apply decoration.")
+        end
     end
 end
 
@@ -309,9 +311,7 @@ local function apply_config(config)
                         -- if hl_group is false, it just means there is no highlighting done for this group
                         if hl_group == false then goto continue end
 
-                        for _, range in ipairs(dec.content) do
-                            apply_decoration(output_buffer, hl_group, output_namespace, range.range)
-                        end
+                        apply_decoration(output_buffer, hl_group, output_namespace, dec.content)
 
                         ::continue::
                     end
@@ -339,9 +339,7 @@ local function apply_config(config)
                         if not hl_group then goto continue end
 
                         vim.api.nvim_buf_clear_namespace(bufnr, syn_id, 0, -1)
-                        for _, range in ipairs(entry.content) do
-                            apply_decoration(bufnr, hl_group, syn_id, range.range)
-                        end
+                        apply_decoration(bufnr, hl_group, syn_id, entry.content)
 
                         ::continue::
                     end
@@ -373,9 +371,7 @@ local function apply_config(config)
                         -- if hl_group is false, it just means there is no highlighting done for this group
                         if hl_group == false then goto continue end
 
-                        for _, range in ipairs(dec.content) do
-                            apply_decoration(buf, hl_group, output_namespace, range.range)
-                        end
+                        apply_decoration(buf, hl_group, output_namespace, dec.content)
 
                         ::continue::
                     end
