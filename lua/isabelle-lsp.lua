@@ -276,8 +276,6 @@ local function apply_config(config)
                 -- handle resizes of output window
                 vim.api.nvim_create_autocmd('WinResized', {
                     callback = function(info)
-                        if info.buf ~= output_buffer and info.buf ~= bufnr then return end
-
                         local new_output_width = vim.api.nvim_win_get_width(output_window)
                         if new_output_width ~= prev_output_width then
                             prev_output_width = new_output_width
@@ -419,8 +417,6 @@ local function apply_config(config)
                             -- handle resizes of output window
                             vim.api.nvim_create_autocmd('WinResized', {
                                 callback = function(info)
-                                    if info.buf ~= new_buf and info.buf ~= thy_buffer then return end
-
                                     local new_width = vim.api.nvim_win_get_width(state_window)
                                     if new_width ~= prev_width then
                                         prev_width = new_width
