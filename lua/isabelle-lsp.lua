@@ -52,7 +52,9 @@ local function caret_update(client)
 
     -- convert to char index for Isabelle
     local line_s = vim.api.nvim_buf_get_lines(bufnr, line, line + 1, false)[1]
-    col = vim.fn.charidx(line_s, col)
+    -- the extra space is so that it still gives us a correct column
+    -- even if the cursor is in insert mode at the end of the line
+    col = vim.fn.charidx(line_s .. " ", col)
 
     send_notification(client, 'caret_update', { uri = uri, line = line, character = col })
 end
