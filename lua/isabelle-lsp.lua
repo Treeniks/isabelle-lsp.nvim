@@ -52,9 +52,15 @@ local function caret_update(client)
     local uri = get_uri_from_fname(fname)
 
     local win = vim.api.nvim_get_current_win()
-    local pos = vim.api.nvim_win_get_cursor(win)
+    local line, col = unpack(vim.api.nvim_win_get_cursor(win))
+    -- required becuase win_get_cursor is (1, 0) indexed -.-
+    line = line - 1
 
-    send_notification(client, 'caret_update', { uri = uri, line = pos[1] - 1, character = pos[2] - 1 })
+    -- convert to char index for Isabelle
+    local line_s = vim.api.nvim_buf_get_lines(bufnr, line, line + 1, false)[1]
+    col = vim.fn.charidx(line_s, col)
+
+    send_notification(client, 'caret_update', { uri = uri, line = line, character = col })
 end
 
 local function set_output_margin(client, size)
