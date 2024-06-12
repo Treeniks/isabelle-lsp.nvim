@@ -173,8 +173,8 @@ local function apply_config(config)
             '-o', 'editor_output_state',
 
             -- for logging
-            '-v',
-            '-L', '~/Documents/isabelle/isabelle-lsp.log',
+            -- '-v',
+            -- '-L', '~/Documents/isabelle/isabelle-lsp.log',
         }
 
         if config.unicode_symbols then
