@@ -156,9 +156,13 @@ local function apply_decoration(bufnr, hl_group, syn_id, content)
         -- thus we use pcall to suppress errors if they occur, as they are disrupting and not of importance
         local success, _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
             { hl_group = hl_group, end_line = end_line, end_col = end_col })
+
         if not success then
             -- we do however write a message to the status line just in case
-            vim.notify("Failed to apply decoration.")
+            --
+            -- ! notify was disabled because it often breaks when applying code actions
+            -- and neovim will block input when that happens (very annoying)
+            -- vim.notify("Failed to apply decoration.")
         end
     end
 end
