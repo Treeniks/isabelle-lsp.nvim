@@ -183,7 +183,9 @@ local function apply_config(config)
 
         if config.unicode_symbols then
             table.insert(cmd, '-o')
-            table.insert(cmd, 'vscode_unicode_symbols')
+            table.insert(cmd, 'vscode_unicode_symbols_edits')
+            table.insert(cmd, '-o')
+            table.insert(cmd, 'vscode_unicode_symbols_output')
         end
     else -- windows cmd
         local unicode_option = ''
