@@ -308,6 +308,8 @@ local function apply_config(config)
             end,
             handlers = {
                 ['PIDE/dynamic_output'] = function(err, params, ctx, config)
+                    if not output_buffer then return end
+
                     local lines = {}
                     -- this regex makes sure that empty lines are still kept
                     for s in params.content:gmatch("([^\r\n]*)\n?") do
