@@ -75,6 +75,21 @@ local function set_state_margin(client, id, size)
     send_notification(client, 'state_set_margin', { id = id, margin = size - 8 })
 end
 
+local function convert_symbols(client, bufnr, text)
+    send_request(
+        client,
+        "symbols_convert_request",
+        { text = text, unicode = true },
+        function(t)
+            local lines = {}
+            for s in t.text:gmatch("([^\r\n]*)\n?") do
+                table.insert(lines, s)
+            end
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+        end
+    )
+end
+
 -- setting false means "don't do any highlighting for this group"
 local hl_group_map = {
     ['background_unprocessed1'] = false,
@@ -459,6 +474,16 @@ local function apply_config(config)
                     send_notification_to_all("symbols_request", {})
                 end,
             },
+            SymbolsConvert = {
+                function()
+                    local clients = vim.lsp.get_active_clients { bufnr = thy_buffer, name = 'isabelle' }
+                    local text = vim.api.nvim_buf_get_lines(thy_buffer, 0, -1, false)
+                    local t = table.concat(text, '\n')
+                    for _, client in ipairs(clients) do
+                        convert_symbols(client, thy_buffer, t)
+                    end
+                end,
+            }
 
         },
         docs = {
