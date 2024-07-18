@@ -35,7 +35,7 @@ local function send_notification(client, method, payload)
 end
 
 local function send_notification_to_all(method, payload)
-    local clients = vim.lsp.get_active_clients { name = 'isabelle' }
+    local clients = vim.lsp.get_clients({ name = 'isabelle' })
     for _, client in ipairs(clients) do
         send_notification(client, method, payload)
     end
