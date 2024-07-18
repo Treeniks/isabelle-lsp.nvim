@@ -1,5 +1,7 @@
-local configs = require 'lspconfig.configs'
-local util = require 'lspconfig.util'
+local configs = require('lspconfig.configs')
+local util = require('lspconfig.util')
+
+local defaults = require('defaults')
 
 local M = {}
 
@@ -64,62 +66,6 @@ local function set_message_margin(client, size)
     send_notification(client, 'set_message_margin', { value = size - 8 })
 end
 
--- setting false means "don't do any highlighting for this group"
-local hl_group_map = {
-    ['background_unprocessed1'] = false,
-    ['background_running1'] = false,
-    ['background_canceled'] = false,
-    ['background_bad'] = false,
-    ['background_intensify'] = false,
-    ['background_markdown_bullet1'] = 'markdownH1',
-    ['background_markdown_bullet2'] = 'markdownH2',
-    ['background_markdown_bullet3'] = 'markdownH3',
-    ['background_markdown_bullet4'] = 'markdownH4',
-    ['foreground_quoted'] = false,
-    ['text_main'] = 'Normal',
-    ['text_quasi_keyword'] = 'Keyword',
-    ['text_free'] = 'Function',
-    ['text_bound'] = 'Identifier',
-    ['text_inner_numeral'] = false,
-    ['text_inner_quoted'] = 'String',
-    ['text_comment1'] = 'Comment',
-    ['text_comment2'] = false, -- seems to not exist in the LSP
-    ['text_comment3'] = false,
-    ['text_dynamic'] = false,
-    ['text_class_parameter'] = false,
-    ['text_antiquote'] = 'Comment',
-    ['text_raw_text'] = 'Comment',
-    ['text_plain_text'] = 'String',
-    ['text_overview_unprocessed'] = false,
-    ['text_overview_running'] = 'Bold',
-    ['text_overview_error'] = false,
-    ['text_overview_warning'] = false,
-    ['dotted_writeln'] = false,
-    ['dotted_warning'] = "DiagnosticWarn",
-    ['dotted_information'] = false,
-    ['spell_checker'] = 'Underlined',
-    -- currently unused by isabelle-emacs
-    -- but will probably be used once my Language Server chages get merged into Isabelle
-    ['text_inner_cartouche'] = false,
-    ['text_var'] = 'Function',
-    ['text_skolem'] = 'Identifier',
-    ['text_tvar'] = 'Type',
-    ['text_tfree'] = 'Type',
-    ['text_operator'] = 'Function',
-    ['text_improper'] = 'Keyword',
-    ['text_keyword3'] = 'Keyword',
-    ['text_keyword2'] = 'Keyword',
-    ['text_keyword1'] = 'Keyword',
-    ['foreground_antiquoted'] = false,
-}
-
-local hl_group_namespace_map = {}
--- create namespaces for syntax highlighting
-for group, _ in pairs(hl_group_map) do
-    local id = vim.api.nvim_create_namespace('isabelle-lsp.' .. group)
-    hl_group_namespace_map[group] = id
-end
-
 local function apply_decoration(bufnr, hl_group, syn_id, content)
     for _, range in ipairs(content) do
         -- range.range has the following format:
@@ -151,6 +97,13 @@ local function apply_decoration(bufnr, hl_group, syn_id, content)
 end
 
 local function apply_config(config)
+    local hl_group_namespace_map = {}
+    -- create namespaces for syntax highlighting
+    for group, _ in pairs(config.hl_group_map) do
+        local id = vim.api.nvim_create_namespace('isabelle-lsp.' .. group)
+        hl_group_namespace_map[group] = id
+    end
+
     local cmd
     if not is_windows then
         cmd = {
@@ -207,7 +160,7 @@ local function apply_config(config)
             on_attach = function(client, bufnr)
                 vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
                     buffer = bufnr,
-                    callback = function(info)
+                    callback = function(_)
                         caret_update(client)
                     end,
                 })
@@ -218,11 +171,7 @@ local function apply_config(config)
                     -- create a new scratch buffer for output & state
                     output_buffer = vim.api.nvim_create_buf(true, true)
                     vim.api.nvim_buf_set_name(output_buffer, "--OUTPUT--")
-                    vim.api.nvim_buf_set_option(output_buffer, 'buftype', 'nofile')
-                    vim.api.nvim_buf_set_option(output_buffer, 'bufhidden', 'hide')
-                    vim.api.nvim_buf_set_option(output_buffer, 'swapfile', false)
-                    vim.api.nvim_buf_set_option(output_buffer, 'buflisted', false)
-                    vim.api.nvim_buf_set_option(output_buffer, 'filetype', 'isabelle_output')
+                    vim.api.nvim_set_option_value('filetype', 'isabelle_output', { buf = output_buffer })
 
                     -- set the content of the output buffer
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
@@ -242,7 +191,7 @@ local function apply_config(config)
                     -- if it's the last window
                     vim.api.nvim_create_autocmd({ "BufEnter" }, {
                         buffer = output_buffer,
-                        callback = function(info)
+                        callback = function(_)
                             if #vim.api.nvim_list_wins() == 1 then
                                 vim.cmd "quit"
                             end
@@ -274,7 +223,7 @@ local function apply_config(config)
                 })
             end,
             handlers = {
-                ['PIDE/dynamic_output'] = function(err, params, ctx, config)
+                ['PIDE/dynamic_output'] = function(_, params, _, _)
                     if not output_buffer then return end
 
                     local lines = {}
@@ -284,7 +233,7 @@ local function apply_config(config)
                     end
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, lines)
                 end,
-                ['PIDE/decoration'] = function(err, params, ctx, config)
+                ['PIDE/decoration'] = function(_, params, _, _)
                     local thy_buffer = find_buffer_by_uri(params.uri)
 
                     if not thy_buffer then
@@ -294,7 +243,7 @@ local function apply_config(config)
 
                     for _, entry in ipairs(params.entries) do
                         local syn_id = hl_group_namespace_map[entry.type]
-                        local hl_group = hl_group_map[entry.type]
+                        local hl_group = config.hl_group_map[entry.type]
 
                         -- if id is nil, it means the hl_group_map doesn't know about this group
                         if not syn_id then
@@ -323,16 +272,9 @@ Isabelle VSCode Language Server
     }
 end
 
-local default_config = {
-    isabelle_path = 'isabelle',
-    vsplit = false,
-    sh_path = 'sh', -- only relevant for Windows
-    unicode_symbols = false,
-}
-
 M.setup = function(user_config)
     -- use default_config instead of returning nil if a config value is not set in user_config
-    local mt = { __index = function(_, k) return default_config[k] end }
+    local mt = { __index = function(_, k) return defaults[k] end }
     setmetatable(user_config, mt)
 
     apply_config(user_config)
