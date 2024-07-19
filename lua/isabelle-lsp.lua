@@ -1,3 +1,5 @@
+-- vi: foldmethod=marker
+
 local configs = require('lspconfig.configs')
 local util = require('lspconfig.util')
 
@@ -49,6 +51,7 @@ end
 
 -- assumes `client` is the client associated with the current window's buffer
 local function caret_update(client)
+    -- {{{
     local bufnr = vim.api.nvim_get_current_buf()
     local fname = vim.api.nvim_buf_get_name(bufnr)
     local uri = get_uri_from_fname(fname)
@@ -65,19 +68,40 @@ local function caret_update(client)
     col = vim.fn.charidx(line_s .. " ", col)
 
     send_notification(client, 'caret_update', { uri = uri, line = line, character = col })
+    -- }}}
+end
+
+-- may return nil if there are no windows with that buffer
+local function get_min_width(bufnr)
+    -- {{{
+    local windows = vim.fn.win_findbuf(bufnr)
+    local min_width
+    for _, window in ipairs(windows) do
+        local width = vim.api.nvim_win_get_width(window)
+        if not min_width or min_width < width then
+            min_width = width
+        end
+    end
+    return min_width
+    -- }}}
 end
 
 local function set_output_margin(client, size)
-    -- the `- 8` is for some headroom
-    send_notification(client, 'output_set_margin', { margin = size - 8 })
+    if size then
+        -- the `- 8` is for some headroom
+        send_notification(client, 'output_set_margin', { margin = size - 8 })
+    end
 end
 
 local function set_state_margin(client, id, size)
-    -- the `- 8` is for some headroom
-    send_notification(client, 'state_set_margin', { id = id, margin = size - 8 })
+    if size then
+        -- the `- 8` is for some headroom
+        send_notification(client, 'state_set_margin', { id = id, margin = size - 8 })
+    end
 end
 
 local function convert_symbols(client, bufnr, text)
+    -- {{{
     send_request(
         client,
         "symbols_convert_request",
@@ -90,9 +114,11 @@ local function convert_symbols(client, bufnr, text)
             vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
         end
     )
+    -- }}}
 end
 
 local function apply_decoration(bufnr, hl_group, syn_id, content)
+    -- {{{
     for _, range in ipairs(content) do
         -- range.range has the following format:
         -- {start_line, start_column, end_line, end_column}
@@ -113,17 +139,10 @@ local function apply_decoration(bufnr, hl_group, syn_id, content)
         -- in which case vim.api.nvim_buf_set_extmark fails
         --
         -- thus we use pcall to suppress errors if they occur, as they are disrupting and not of importance
-        local success, _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
+        local _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
             { hl_group = hl_group, end_line = end_line, end_col = end_col })
-
-        if not success then
-            -- we do however write a message to the status line just in case
-            --
-            -- ! notify was disabled because it often breaks when applying code actions
-            -- and neovim will block input when that happens (very annoying)
-            -- vim.notify("Failed to apply decoration.")
-        end
     end
+    -- }}}
 end
 
 local function apply_config(config)
@@ -136,7 +155,9 @@ local function apply_config(config)
 
     local output_namespace = vim.api.nvim_create_namespace('isabelle-lsp.dynamic_output')
 
+    -- set up the cmd to run isabelle's language server
     local cmd
+    -- {{{
     if not is_windows then
         cmd = {
             config.isabelle_path, 'vscode_server',
@@ -145,8 +166,8 @@ local function apply_config(config)
             '-o', 'editor_output_state',
 
             -- for logging
-            -- '-v',
-            -- '-L', '~/Documents/isabelle/isabelle-lsp.log',
+            '-v',
+            '-L', '~/Documents/isabelle/isabelle-lsp.log',
         }
 
         if config.unicode_symbols_output then
@@ -181,15 +202,9 @@ local function apply_config(config)
             -- 'cd ' .. util.path.dirname(isabelle_path) .. ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false -v -L "isabelle-lsp.log"',
         }
     end
+    -- }}}
 
-    local output_window
     local output_buffer
-    local prev_output_width
-
-    local thy_buffer
-
-    local state_window
-    -- there can be multiple state buffers
     local state_buffers = {}
 
     configs.isabelle = {
@@ -206,8 +221,6 @@ local function apply_config(config)
             end,
             single_file_support = true,
             on_attach = function(client, bufnr)
-                thy_buffer = bufnr
-
                 vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
                     buffer = bufnr,
                     callback = function(_)
@@ -217,7 +230,7 @@ local function apply_config(config)
 
                 -- only create output buffer if it doesn't exist yet
                 -- otherwise reuse it
-                if not output_window then
+                if not output_buffer then
                     -- create a new scratch buffer for output & state
                     output_buffer = vim.api.nvim_create_buf(true, true)
                     vim.api.nvim_buf_set_name(output_buffer, "--OUTPUT--")
@@ -226,6 +239,7 @@ local function apply_config(config)
                     -- set the content of the output buffer
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
 
+                    -- TODO replace with nvim_open_win()
                     -- place the output window
                     if config.vsplit then
                         vim.api.nvim_command('vsplit')
@@ -235,7 +249,6 @@ local function apply_config(config)
                         vim.api.nvim_command('wincmd j')
                     end
                     vim.api.nvim_set_current_buf(output_buffer)
-                    output_window = vim.api.nvim_get_current_win()
 
                     -- make the output buffer automatically quit
                     -- if it's the last window
@@ -255,23 +268,21 @@ local function apply_config(config)
                         vim.api.nvim_command('wincmd k')
                     end
 
-                    prev_output_width = vim.api.nvim_win_get_width(output_window)
-                    set_output_margin(client, prev_output_width)
+                    local min_width = get_min_width(output_buffer)
+                    set_output_margin(client, min_width)
                 end
 
-                -- handle resizes of output window
+                -- handle resizes of output buffers
                 vim.api.nvim_create_autocmd('WinResized', {
                     callback = function(_)
-                        local new_output_width = vim.api.nvim_win_get_width(output_window)
-                        if new_output_width ~= prev_output_width then
-                            prev_output_width = new_output_width
-                            set_output_margin(client, prev_output_width)
-                        end
+                        local min_width = get_min_width(output_buffer)
+                        set_output_margin(client, min_width)
                     end,
                 })
             end,
             handlers = {
                 ['PIDE/dynamic_output'] = function(_, params, _, _)
+                    -- {{{
                     if not output_buffer then return end
 
                     local lines = {}
@@ -301,8 +312,10 @@ local function apply_config(config)
 
                         ::continue::
                     end
+                    -- }}}
                 end,
                 ['PIDE/decoration'] = function(_, params, _, _)
+                    -- {{{
                     local bufnr = find_buffer_by_uri(params.uri)
 
                     if not bufnr then
@@ -329,8 +342,10 @@ local function apply_config(config)
 
                         ::continue::
                     end
+                    -- }}}
                 end,
                 ['PIDE/state_output'] = function(_, params, _, _)
+                    -- {{{
                     local id = params.id
                     local buf = state_buffers[id]
 
@@ -361,19 +376,19 @@ local function apply_config(config)
 
                         ::continue::
                     end
+                    -- }}}
                 end,
             },
         },
         commands = {
             StateInit = {
+                -- {{{
                 function()
-                    local clients = vim.lsp.get_clients({ bufnr = thy_buffer, name = 'isabelle' })
+                    local clients = vim.lsp.get_clients({ name = 'isabelle' })
 
                     for _, client in ipairs(clients) do
                         send_request(client, 'state_init', {}, function(result)
                             local id = result.state_id
-
-                            local prev_width
 
                             local new_buf = vim.api.nvim_create_buf(true, true)
                             vim.api.nvim_buf_set_name(new_buf, "--STATE-- " .. id)
@@ -381,31 +396,23 @@ local function apply_config(config)
 
                             vim.api.nvim_buf_set_lines(new_buf, 0, -1, false, {})
 
-                            -- only create a state window if it doesn't exist yet
-                            -- otherwise reuse it
-                            if not state_window then
-                                -- place the state window
-                                vim.api.nvim_command('vsplit')
-                                vim.api.nvim_command('wincmd l')
+                            -- place the state window
+                            vim.api.nvim_command('vsplit')
+                            vim.api.nvim_command('wincmd l')
 
-                                vim.api.nvim_set_current_buf(new_buf)
-                                state_window = vim.api.nvim_get_current_win()
+                            vim.api.nvim_set_current_buf(new_buf)
 
-                                -- put focus back on main buffer
-                                vim.api.nvim_command('wincmd h')
+                            -- put focus back on main buffer
+                            vim.api.nvim_command('wincmd h')
 
-                                prev_width = vim.api.nvim_win_get_width(state_window)
-                                set_state_margin(client, id, prev_width)
-                            end
+                            local min_width = get_min_width(new_buf)
+                            set_state_margin(client, id, min_width)
 
-                            -- handle resizes of output window
+                            -- handle resizes
                             vim.api.nvim_create_autocmd('WinResized', {
                                 callback = function(_)
-                                    local new_width = vim.api.nvim_win_get_width(state_window)
-                                    if new_width ~= prev_width then
-                                        prev_width = new_width
-                                        set_state_margin(client, id, prev_width)
-                                    end
+                                    local min_width2 = get_min_width(new_buf)
+                                    set_state_margin(client, id, min_width2)
                                 end,
                             })
 
@@ -413,21 +420,27 @@ local function apply_config(config)
                         end)
                     end
                 end,
+                -- }}}
             },
             SymbolsRequest = {
+                -- {{{
                 function()
                     send_notification_to_all("symbols_request", {})
                 end,
+                -- }}}
             },
             SymbolsConvert = {
+                -- {{{
                 function()
-                    local clients = vim.lsp.get_clients({ bufnr = thy_buffer, name = 'isabelle' })
-                    local text = vim.api.nvim_buf_get_lines(thy_buffer, 0, -1, false)
+                    local clients = vim.lsp.get_clients({ name = 'isabelle' })
+                    local buf = vim.api.nvim_get_current_buf()
+                    local text = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
                     local t = table.concat(text, '\n')
                     for _, client in ipairs(clients) do
-                        convert_symbols(client, thy_buffer, t)
+                        convert_symbols(client, buf, t)
                     end
                 end,
+                -- }}}
             }
 
         },
