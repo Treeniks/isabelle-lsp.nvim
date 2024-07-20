@@ -1,6 +1,8 @@
-# `isabelle-language-server`
+# isabelle-language-server
 
 Since building this plugin, I have taken up the task of improving the underlying Isabelle language server in the context of my bachelor's thesis. The plan is to eventually upstream my changes into the Isabelle distribution, however I cannot say when that will happen. For now, the fork can be found [here](https://github.com/Treeniks/isabelle-language-server). An accompanying updated Neovim plugin with instructions can be found [in the `isabelle-language-server` branch](https://github.com/Treeniks/isabelle-lsp.nvim/tree/isabelle-language-server), which will eventually replace master once the changes have been upstreamed.
+
+I strongly recommend using that instead of what is described below, as it is both newer and includes many new features.
 
 # isabelle-lsp.nvim \[WIP\]
 
