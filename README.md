@@ -122,7 +122,7 @@ Isabelle has dynamic syntax highlighting. While [isabelle-syn.nvim](https://gith
 require('isabelle-lsp').setup({
     -- setting false means "don't do any highlighting for this group"
     -- these are the defaults currently in use
-    local hl_group_map = {
+    hl_group_map = {
         ['background_unprocessed1'] = false,
         ['background_running1'] = false,
         ['background_canceled'] = false,
