@@ -45,7 +45,7 @@ See also the [isabelle-language-server wiki](https://github.com/Treeniks/isabell
     ```
 2. Add a unique Isabelle identifier to keep it separate from other Isabelle instances on the system:
     ```sh
-    echo "isabelle-language-server" >> etc/ISABELLE_IDENTIFIER
+    echo "isabelle-language-server" >> ./etc/ISABELLE_IDENTIFIER
     ```
 3. Initialize Isabelle:
     ```sh
