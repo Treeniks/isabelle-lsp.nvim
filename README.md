@@ -1,6 +1,6 @@
 # isabelle-lsp.nvim \[WIP\]
 
-![isabelle-lsp.nvim](https://github.com/Treeniks/isabelle-lsp.nvim/assets/56131826/2ce8bef0-9176-43e0-a12c-13969f1ea91d)
+![isabelle-lsp.nvim](https://github.com/user-attachments/assets/19c7780e-5e30-4129-978b-4bff5e18c39f)
 
 Isabelle LSP configuration for [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig).
 
