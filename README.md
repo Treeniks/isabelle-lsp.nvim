@@ -2,15 +2,19 @@
 
 ![isabelle-lsp.nvim](https://github.com/user-attachments/assets/19c7780e-5e30-4129-978b-4bff5e18c39f)
 
-Isabelle LSP configuration for [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig).
-
-The plugin uses the [**isabelle-emacs** fork](https://github.com/m-fleury/isabelle-emacs)'s Language Server, it will *not* work with the original Isabelle LSP.
+Isabelle LSP configuration for [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) using the [isabelle-language-server](https://github.com/Treeniks/isabelle-language-server) fork.
 
 Neovim does not have an isabelle filetype, so you have to add one yourself or install a plugin which introduces one (like [isabelle-syn.nvim](https://github.com/Treeniks/isabelle-syn.nvim)). See [Quickstart](#Quickstart) on how to do so.
 
-The Isabelle language server will handle most syntax highlighting, in particular all dynamic syntax highlighting, however for some more static things (keywords like `theorem` and `lemma`), you will additionally need a normal vim syntax definition, e.g. [isabelle-syn.nvim](https://github.com/Treeniks/isabelle-syn.nvim).
+Mind you also that the language server needs a little bit before it starts up. When you open a `.thy` file, it will start the language server in the background and open an output panel once it's running.
 
-Mind you also that the language server needs a little bit before it starts up. When you open a `.thy` file, it will start the language server in the background and open an output panel once it's running. If it's the first time starting the language server, it might take *much* longer as isabelle will first have to build it.
+## Additions/Improvements of the isabelle-language-server fork for Neovim
+
+- highlighting in output panel
+- correct line-breaks in output panel
+- full dynamic syntax highlighting (it was only partial before)
+- code actions for active markup (e.g. in JEdit, clicking on a proof when sledgehammering to insert it can instead be done via a code action)
+- working autocompletion for symbols (so no need for manual snippets no more)
 
 ## Install
 
@@ -21,6 +25,7 @@ Install with your package manager of choice, e.g. [lazy.nvim](https://github.com
 require('lazy').setup({
     {
         'Treeniks/isabelle-lsp.nvim',
+        branch = 'isabelle-language-server',
         dependencies = {
             'neovim/nvim-lspconfig'
         },
@@ -28,42 +33,25 @@ require('lazy').setup({
 })
 ```
 
-### isabelle-emacs
+### isabelle-language-server
 
-See also the [Preparation section of the isabelle-emacs install guide](https://github.com/m-fleury/isabelle-emacs/blob/Isabelle2023-vsce/src/Tools/emacs-lsp/spacemacs_layers/isabelle/README.org#preparation).
+See also the [isabelle-language-server wiki](https://github.com/Treeniks/isabelle-language-server/wiki).
 
-1. Clone the [isabelle-emacs](https://github.com/m-fleury/isabelle-emacs) Repository:
+1. Clone the [isabelle-language-server](https://github.com/Treeniks/isabelle-language-server) Repository:
     ```sh
-    git clone https://github.com/m-fleury/isabelle-emacs.git
-    cd isabelle-emacs
-    git checkout Isabelle2023-vsce
+    git clone https://github.com/Treeniks/isabelle-language-server.git
+    cd isabelle-language-server
+    git checkout language-server # should be the default anyway
     ```
-2. Initialize Isabelle:
+2. Add a unique Isabelle identifier to keep it separate from other Isabelle instances on the system:
     ```sh
-    ./bin/isabelle components -I
-    ./bin/isabelle components -a
+    echo "isabelle-language-server" >> etc/ISABELLE_IDENTIFIER
+    ```
+3. Initialize Isabelle:
+    ```sh
+    ./Admin/init
     ./bin/isabelle build -b HOL
     ```
-
-### Patch isabelle-emacs
-
-The Language Server has one particular quirk that doesn't play nice with neovim's LSP client: The way document changes are registered within the Server often desynchronizes with the neovim client. To fix this, you will have to manually edit `isabelle-emacs`'s LSP code.
-
-In the file `isabelle-emacs/src/Tools/VSCode/src/language_server.scala`, you will have to change the `change_document` function:
-```scala
-  private def change_document(
-    file: JFile,
-    version: Long,
-    changes: List[LSP.TextDocumentChange]
-  ): Unit = {
-    changes.foreach(change =>
-      resources.change_model(session, editor, file, version, change.text, change.range))
-
-    delay_input.invoke()
-    delay_output.invoke()
-  }
-```
-Afterwards, you will need to let isabelle rebuild its tools. Simply running the `isabelle-emacs/bin/isabelle` binary again is enough.
 
 ## Quickstart
 
@@ -79,10 +67,10 @@ Afterwards, you will need to let isabelle rebuild its tools. Simply running the 
 2. Add the isabelle LSP to your LSP configurations:
     ```lua
     require('isabelle-lsp').setup({
-        isabelle_path = '/path/to/isabelle-emacs/bin/isabelle',
+        isabelle_path = '/path/to/isabelle-language-server/bin/isabelle',
     })
     ```
-    The `isabelle_path` line if optional if the isabelle-emacs `isabelle` binary is already in your PATH (and *not* the original `isabelle` binary).
+    The `isabelle_path` line if optional if the isabelle-language-server `isabelle` binary is already in your PATH.
 3. Enable the language server:
     ```lua
     local lspconfig = require('lspconfig')
@@ -104,12 +92,22 @@ require('isabelle-lsp').setup({
 
 ### Unicode Symbols
 
-By default, symbols like `⟹` will be shown with their ascii representation (`\<Longrightarrow>`) within the output panel. If you want unicode symbols instead, you can set it so in the setup:
+Isabelle has its own concept of Symbols. For simplicity, symbols can be either shown in a unicode representation (`⟹`) or in their ascii representation (`\<Longrightarrow>`). By default, the language server will always use the ascii representation. If you use [isabelle-syn.nvim](https://github.com/Treeniks/isabelle-syn.nvim), this isn't a big problem because that plugin uses vim's [conceal](https://neovim.io/doc/user/options.html#'conceallevel') feature to display the correct symbols anyway, however this might still be annoying to edit in practice.
+
+Thus, there are two options to adjust the behaviour: `unicode_symbols_output` and `unicode_symbols_edits`.
+- `unicode_symbols_output`: adjusts what representation should be used in output and state panels, as well as other displayed messages
+- `unicode_symbols_edits`: adjusts what representation should be used for anything editing the buffer, e.g. completions and code actions
+
+Both settings are *false* by default.
+
 ```lua
 require('isabelle-lsp').setup({
-    unicode_symbols = true,
+    unicode_symbols_output = true,
+    unicode_symbols_edits = true,
 })
 ```
+
+Additionally, if you want to convert the current buffer from ascii to unicode representations, you can use the `:SymbolsConvert` command.
 
 ### Font
 
@@ -171,6 +169,8 @@ require('isabelle-lsp').setup({
 ```
 
 ## Windows
+
+**The following was tested before the isabelle-language-server fork existed and has not been tested since. I have no idea if it currently works.**
 
 This plugin *can* work on Windows, but it requires a little more setup and can be rather jank. It's also rather slow (it takes ~20 seconds to start the server).
 
