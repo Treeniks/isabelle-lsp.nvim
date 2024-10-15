@@ -164,10 +164,6 @@ local function apply_config(config)
             '-o', 'vscode_pide_extensions',
             '-o', 'vscode_html_output=false',
             '-o', 'editor_output_state',
-
-            -- for logging
-            '-v',
-            '-L', '~/Documents/isabelle/isabelle-lsp.log',
         }
 
         if config.unicode_symbols_output then
@@ -178,6 +174,15 @@ local function apply_config(config)
         if config.unicode_symbols_edits then
             table.insert(cmd, '-o')
             table.insert(cmd, 'vscode_unicode_symbols_edits')
+        end
+
+        if config.verbose then
+            table.insert(cmd, '-v')
+        end
+
+        if config.log then
+            table.insert(cmd, '-L')
+            table.insert(cmd, config.log)
         end
     else -- windows cmd
         local unicode_options_output = ''
@@ -190,16 +195,23 @@ local function apply_config(config)
             unicode_option_edits = ' -o vscode_unicode_symbols_edits'
         end
 
+        local verbose = ''
+        if config.verbose then
+            verbose = ' -v'
+        end
+
+        local log = ''
+        if config.log then
+            log = ' -L ' .. config.log
+        end
+
         cmd = {
             config.sh_path, '-c',
             'cd ' ..
             util.path.dirname(config.isabelle_path) ..
             ' && ./isabelle vscode_server -o vscode_pide_extensions -o vscode_html_output=false -o editor_output_state' ..
-            unicode_options_output .. unicode_option_edits,
-
-            -- for logging
-            -- it is not possible to set the log file via a full-path for windows because Isabelle refuses ':' in paths...
-            -- 'cd ' .. util.path.dirname(isabelle_path) .. ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false -v -L "isabelle-lsp.log"',
+            unicode_options_output .. unicode_option_edits ..
+            verbose .. log,
         }
     end
     -- }}}

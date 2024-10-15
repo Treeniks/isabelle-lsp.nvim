@@ -168,6 +168,16 @@ require('isabelle-lsp').setup({
 })
 ```
 
+### Logging
+
+To enable server-side logging:
+```lua
+require('isabelle-lsp').setup({
+    log = '~/isabelle.log',
+    verbose = true, -- false by default
+})
+```
+
 ## Windows
 
 **The following was tested before the isabelle-language-server fork existed and has not been tested since. I have no idea if it currently works.**

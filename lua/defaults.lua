@@ -54,6 +54,8 @@ local default_config = {
     unicode_symbols_output = false,
     unicode_symbols_edits = false,
     hl_group_map = hl_group_map,
+    log = nil,
+    verbose = false,
 }
 
 return default_config
