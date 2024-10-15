@@ -2,19 +2,13 @@
 
 ![isabelle-lsp.nvim](https://github.com/user-attachments/assets/19c7780e-5e30-4129-978b-4bff5e18c39f)
 
-Isabelle LSP configuration for [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig) using the [isabelle-language-server](https://github.com/Treeniks/isabelle-language-server) fork.
+Isabelle LSP configuration for [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig).
 
 Neovim does not have an isabelle filetype, so you have to add one yourself or install a plugin which introduces one (like [isabelle-syn.nvim](https://github.com/Treeniks/isabelle-syn.nvim)). See [Quickstart](#Quickstart) on how to do so.
 
 Mind you also that the language server needs a little bit before it starts up. When you open a `.thy` file, it will start the language server in the background and open an output panel once it's running.
 
-## Additions/Improvements of the isabelle-language-server fork for Neovim
-
-- highlighting in output panel
-- correct line-breaks in output panel
-- full dynamic syntax highlighting (it was only partial before)
-- code actions for active markup (e.g. in JEdit, clicking on a proof when sledgehammering to insert it can instead be done via a code action)
-- working autocompletion for symbols (so no need for manual snippets no more)
+This plugin currently requires changeset [aa77be3e8329](https://isabelle.sketis.net/repos/isabelle/rev/aa77be3e8329) or later of Isabelle to work.
 
 ## Install
 
@@ -33,23 +27,25 @@ require('lazy').setup({
 })
 ```
 
-### isabelle-language-server
+### Isabelle
 
-See also the [isabelle-language-server wiki](https://github.com/Treeniks/isabelle-language-server/wiki).
+In the context of my bachelor's thesis, I have contributed several changes to the Isabelle language server. These have been upstreamed as of 2024-10-02, however they are not part of any Isabelle release yet. You will need changeset [aa77be3e8329](https://isabelle.sketis.net/repos/isabelle/rev/aa77be3e8329) or later. If you also want these changes to work within Isabelle/VSCode, you'll need at least changeset [e0327a38bf4d](https://isabelle.sketis.net/repos/isabelle/rev/e0327a38bf4d). You can clone the Isabelle repository with Mercurial from <https://isabelle-dev.sketis.net/source/isabelle/>. There is also a [GitHub mirror](https://github.com/isabelle-prover/mirror-isabelle) if you prefer to use git.
 
-1. Clone the [isabelle-language-server](https://github.com/Treeniks/isabelle-language-server) Repository:
+1. Clone [Isabelle Repository](https://isabelle-dev.sketis.net/source/isabelle/):
     ```sh
-    git clone https://github.com/Treeniks/isabelle-language-server.git
-    cd isabelle-language-server
-    git checkout language-server # should be the default anyway
+    hg clone https://isabelle-dev.sketis.net/source/isabelle/
+    cd isabelle
     ```
-2. Add a unique Isabelle identifier to keep it separate from other Isabelle instances on the system:
+2. (Optional) Add a unique Isabelle identifier to keep it separate from other Isabelle instances on the system:
     ```sh
     echo "isabelle-language-server" >> ./etc/ISABELLE_IDENTIFIER
     ```
 3. Initialize Isabelle:
     ```sh
     ./Admin/init
+
+    # will happen automatically if you open a theory file
+    # but since it takes a long time it's more convenient to do it now
     ./bin/isabelle build -b HOL
     ```
 
@@ -67,10 +63,10 @@ See also the [isabelle-language-server wiki](https://github.com/Treeniks/isabell
 2. Add the isabelle LSP to your LSP configurations:
     ```lua
     require('isabelle-lsp').setup({
-        isabelle_path = '/path/to/isabelle-language-server/bin/isabelle',
+        isabelle_path = '/path/to/isabelle/bin/isabelle',
     })
     ```
-    The `isabelle_path` line if optional if the isabelle-language-server `isabelle` binary is already in your PATH.
+    The `isabelle_path` line if optional if the `isabelle` binary is already in your PATH.
 3. Enable the language server:
     ```lua
     local lspconfig = require('lspconfig')
@@ -180,9 +176,11 @@ require('isabelle-lsp').setup({
 
 ## Windows
 
-**The following was tested before the isabelle-language-server fork existed and has not been tested since. I have no idea if it currently works.**
+**The following was tested before my language server changes existed and has not been tested since. I have no idea if it currently works.**
 
-This plugin *can* work on Windows, but it requires a little more setup and can be rather jank. It's also rather slow (it takes ~20 seconds to start the server).
+This plugin *can* work on Windows, but it requires a little more setup and can be rather jank. It's also pretty slow (it takes ~20 seconds to start the server).
+
+If you use WSL, it's probably better to use Isabelle and Neovim under WSL as well. I would not recommend mixing the two, although it seems possible.
 
 1. The core installation procedure is the same as above.
 2. You'll need some kind of bash-like shell. For this, you can either use [MSYS2](https://www.msys2.org/), [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) or [Cygwin](https://www.cygwin.com/). I'd recommend MSYS2.
