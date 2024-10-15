@@ -51,8 +51,11 @@ local default_config = {
     isabelle_path = 'isabelle',
     vsplit = false,
     sh_path = 'sh', -- only relevant for Windows
-    unicode_symbols = false,
+    unicode_symbols_output = false,
+    unicode_symbols_edits = false,
     hl_group_map = hl_group_map,
+    log = nil,
+    verbose = false,
 }
 
 return default_config

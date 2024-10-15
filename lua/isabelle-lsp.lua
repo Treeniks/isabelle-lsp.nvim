@@ -1,3 +1,5 @@
+-- vi: foldmethod=marker
+
 local configs = require('lspconfig.configs')
 local util = require('lspconfig.util')
 
@@ -26,12 +28,18 @@ local function find_buffer_by_uri(uri)
     return nil
 end
 
-local function send_notification(client, method, payload)
-    client.request('PIDE/' .. method, payload, function(err)
+local function send_request(client, method, payload, callback)
+    client.request('PIDE/' .. method, payload, function(err, result)
         if err then
             error(tostring(err))
         end
+
+        callback(result)
     end, 0)
+end
+
+local function send_notification(client, method, payload)
+    send_request(client, method, payload, function(_) end)
 end
 
 local function send_notification_to_all(method, payload)
@@ -43,6 +51,7 @@ end
 
 -- assumes `client` is the client associated with the current window's buffer
 local function caret_update(client)
+    -- {{{
     local bufnr = vim.api.nvim_get_current_buf()
     local fname = vim.api.nvim_buf_get_name(bufnr)
     local uri = get_uri_from_fname(fname)
@@ -59,14 +68,57 @@ local function caret_update(client)
     col = vim.fn.charidx(line_s .. " ", col)
 
     send_notification(client, 'caret_update', { uri = uri, line = line, character = col })
+    -- }}}
 end
 
-local function set_message_margin(client, size)
-    -- the `- 8` is for some headroom
-    send_notification(client, 'set_message_margin', { value = size - 8 })
+-- may return nil if there are no windows with that buffer
+local function get_min_width(bufnr)
+    -- {{{
+    local windows = vim.fn.win_findbuf(bufnr)
+    local min_width
+    for _, window in ipairs(windows) do
+        local width = vim.api.nvim_win_get_width(window)
+        if not min_width or min_width < width then
+            min_width = width
+        end
+    end
+    return min_width
+    -- }}}
+end
+
+local function set_output_margin(client, size)
+    if size then
+        -- the `- 8` is for some headroom
+        send_notification(client, 'output_set_margin', { margin = size - 8 })
+    end
+end
+
+local function set_state_margin(client, id, size)
+    if size then
+        -- the `- 8` is for some headroom
+        send_notification(client, 'state_set_margin', { id = id, margin = size - 8 })
+    end
+end
+
+local function convert_symbols(client, bufnr, text)
+    -- {{{
+    send_request(
+        client,
+        "symbols_convert_request",
+        { text = text, unicode = true },
+        function(t)
+            local lines = {}
+            for s in t.text:gmatch("([^\r\n]*)\n?") do
+                table.insert(lines, s)
+            end
+            vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+        end
+    )
+    -- }}}
 end
 
 local function apply_decoration(bufnr, hl_group, syn_id, content)
+    -- {{{
     for _, range in ipairs(content) do
         -- range.range has the following format:
         -- {start_line, start_column, end_line, end_column}
@@ -87,13 +139,10 @@ local function apply_decoration(bufnr, hl_group, syn_id, content)
         -- in which case vim.api.nvim_buf_set_extmark fails
         --
         -- thus we use pcall to suppress errors if they occur, as they are disrupting and not of importance
-        local success, _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
+        local _ = pcall(vim.api.nvim_buf_set_extmark, bufnr, syn_id, start_line, start_col,
             { hl_group = hl_group, end_line = end_line, end_col = end_col })
-        if not success then
-            -- we do however write a message to the status line just in case
-            vim.notify("Failed to apply decoration.")
-        end
     end
+    -- }}}
 end
 
 local function apply_config(config)
@@ -104,27 +153,56 @@ local function apply_config(config)
         hl_group_namespace_map[group] = id
     end
 
+    local output_namespace = vim.api.nvim_create_namespace('isabelle-lsp.dynamic_output')
+
+    -- set up the cmd to run isabelle's language server
     local cmd
+    -- {{{
     if not is_windows then
         cmd = {
             config.isabelle_path, 'vscode_server',
             '-o', 'vscode_pide_extensions',
             '-o', 'vscode_html_output=false',
             '-o', 'editor_output_state',
-
-            -- for logging
-            -- '-v',
-            -- '-L', '~/Documents/isabelle/isabelle-lsp.log',
         }
 
-        if config.unicode_symbols then
+        if config.unicode_symbols_output then
             table.insert(cmd, '-o')
-            table.insert(cmd, 'vscode_unicode_symbols')
+            table.insert(cmd, 'vscode_unicode_symbols_output')
+        end
+
+        if config.unicode_symbols_edits then
+            table.insert(cmd, '-o')
+            table.insert(cmd, 'vscode_unicode_symbols_edits')
+        end
+
+        if config.verbose then
+            table.insert(cmd, '-v')
+        end
+
+        if config.log then
+            table.insert(cmd, '-L')
+            table.insert(cmd, config.log)
         end
     else -- windows cmd
-        local unicode_option = ''
-        if config.unicode_symbols then
-            unicode_option = ' -o vscode_unicode_symbols'
+        local unicode_options_output = ''
+        if config.unicode_symbols_output then
+            unicode_options_output = ' -o vscode_unicode_symbols_output'
+        end
+
+        local unicode_option_edits = ''
+        if config.unicode_symbols_edits then
+            unicode_option_edits = ' -o vscode_unicode_symbols_edits'
+        end
+
+        local verbose = ''
+        if config.verbose then
+            verbose = ' -v'
+        end
+
+        local log = ''
+        if config.log then
+            log = ' -L ' .. config.log
         end
 
         cmd = {
@@ -132,17 +210,14 @@ local function apply_config(config)
             'cd ' ..
             util.path.dirname(config.isabelle_path) ..
             ' && ./isabelle vscode_server -o vscode_pide_extensions -o vscode_html_output=false -o editor_output_state' ..
-            unicode_option,
-
-            -- for logging
-            -- it is not possible to set the log file via a full-path for windows because Isabelle refuses ':' in paths...
-            -- 'cd ' .. util.path.dirname(isabelle_path) .. ' && ./isabelle vscode_server -o vscode_unicode_symbols -o vscode_pide_extensions -o vscode_html_output=false -v -L "isabelle-lsp.log"',
+            unicode_options_output .. unicode_option_edits ..
+            verbose .. log,
         }
     end
+    -- }}}
 
-    local output_window
     local output_buffer
-    local prev_output_width
+    local state_buffers = {}
 
     configs.isabelle = {
         default_config = {
@@ -167,7 +242,7 @@ local function apply_config(config)
 
                 -- only create output buffer if it doesn't exist yet
                 -- otherwise reuse it
-                if not output_window then
+                if not output_buffer then
                     -- create a new scratch buffer for output & state
                     output_buffer = vim.api.nvim_create_buf(true, true)
                     vim.api.nvim_buf_set_name(output_buffer, "--OUTPUT--")
@@ -176,6 +251,7 @@ local function apply_config(config)
                     -- set the content of the output buffer
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, {})
 
+                    -- TODO replace with nvim_open_win()
                     -- place the output window
                     if config.vsplit then
                         vim.api.nvim_command('vsplit')
@@ -185,7 +261,6 @@ local function apply_config(config)
                         vim.api.nvim_command('wincmd j')
                     end
                     vim.api.nvim_set_current_buf(output_buffer)
-                    output_window = vim.api.nvim_get_current_win()
 
                     -- make the output buffer automatically quit
                     -- if it's the last window
@@ -205,25 +280,21 @@ local function apply_config(config)
                         vim.api.nvim_command('wincmd k')
                     end
 
-                    prev_output_width = vim.api.nvim_win_get_width(output_window)
-                    set_message_margin(client, prev_output_width)
+                    local min_width = get_min_width(output_buffer)
+                    set_output_margin(client, min_width)
                 end
 
-                -- handle resizes of output window
+                -- handle resizes of output buffers
                 vim.api.nvim_create_autocmd('WinResized', {
-                    callback = function(info)
-                        if info.buf ~= output_buffer and info.buf ~= bufnr then return end
-
-                        local new_output_width = vim.api.nvim_win_get_width(output_window)
-                        if new_output_width ~= prev_output_width then
-                            prev_output_width = new_output_width
-                            set_message_margin(client, prev_output_width)
-                        end
+                    callback = function(_)
+                        local min_width = get_min_width(output_buffer)
+                        set_output_margin(client, min_width)
                     end,
                 })
             end,
             handlers = {
                 ['PIDE/dynamic_output'] = function(_, params, _, _)
+                    -- {{{
                     if not output_buffer then return end
 
                     local lines = {}
@@ -232,11 +303,34 @@ local function apply_config(config)
                         table.insert(lines, s)
                     end
                     vim.api.nvim_buf_set_lines(output_buffer, 0, -1, false, lines)
+
+                    -- clear all decorations
+                    vim.api.nvim_buf_clear_namespace(output_buffer, output_namespace, 0, -1)
+
+                    for _, dec in ipairs(params.decorations) do
+                        local hl_group = config.hl_group_map[dec.type]
+
+                        -- if hl_group is nil, it means the hl_group_map doesn't know about this group
+                        if hl_group == nil then
+                            -- in particular, hl_group is nil here too
+                            vim.notify("Could not find hl_group " .. dec.type .. ".")
+                            goto continue
+                        end
+
+                        -- if hl_group is false, it just means there is no highlighting done for this group
+                        if hl_group == false then goto continue end
+
+                        apply_decoration(output_buffer, hl_group, output_namespace, dec.content)
+
+                        ::continue::
+                    end
+                    -- }}}
                 end,
                 ['PIDE/decoration'] = function(_, params, _, _)
-                    local thy_buffer = find_buffer_by_uri(params.uri)
+                    -- {{{
+                    local bufnr = find_buffer_by_uri(params.uri)
 
-                    if not thy_buffer then
+                    if not bufnr then
                         vim.notify("Could not find buffer for " .. params.uri .. ".")
                         return
                     end
@@ -255,15 +349,113 @@ local function apply_config(config)
                         -- if hl_group is false, it just means there is no highlighting done for this group
                         if not hl_group then goto continue end
 
-                        vim.api.nvim_buf_clear_namespace(thy_buffer, syn_id, 0, -1)
-                        apply_decoration(thy_buffer, hl_group, syn_id, entry.content)
+                        vim.api.nvim_buf_clear_namespace(bufnr, syn_id, 0, -1)
+                        apply_decoration(bufnr, hl_group, syn_id, entry.content)
 
                         ::continue::
                     end
+                    -- }}}
+                end,
+                ['PIDE/state_output'] = function(_, params, _, _)
+                    -- {{{
+                    local id = params.id
+                    local buf = state_buffers[id]
+
+                    local lines = {}
+                    -- this regex makes sure that empty lines are still kept
+                    for s in params.content:gmatch("([^\r\n]*)\n?") do
+                        table.insert(lines, s)
+                    end
+                    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+                    -- clear all decorations
+                    vim.api.nvim_buf_clear_namespace(buf, output_namespace, 0, -1)
+
+                    for _, dec in ipairs(params.decorations) do
+                        local hl_group = config.hl_group_map[dec.type]
+
+                        -- if hl_group is nil, it means the hl_group_map doesn't know about this group
+                        if hl_group == nil then
+                            -- in particular, hl_group is nil here too
+                            vim.notify("Could not find hl_group " .. dec.type .. ".")
+                            goto continue
+                        end
+
+                        -- if hl_group is false, it just means there is no highlighting done for this group
+                        if hl_group == false then goto continue end
+
+                        apply_decoration(buf, hl_group, output_namespace, dec.content)
+
+                        ::continue::
+                    end
+                    -- }}}
                 end,
             },
         },
-        commands = {},
+        commands = {
+            StateInit = {
+                -- {{{
+                function()
+                    local clients = vim.lsp.get_clients({ name = 'isabelle' })
+
+                    for _, client in ipairs(clients) do
+                        send_request(client, 'state_init', {}, function(result)
+                            local id = result.state_id
+
+                            local new_buf = vim.api.nvim_create_buf(true, true)
+                            vim.api.nvim_buf_set_name(new_buf, "--STATE-- " .. id)
+                            vim.api.nvim_set_option_value('filetype', 'isabelle_output', { buf = new_buf })
+
+                            vim.api.nvim_buf_set_lines(new_buf, 0, -1, false, {})
+
+                            -- place the state window
+                            vim.api.nvim_command('vsplit')
+                            vim.api.nvim_command('wincmd l')
+
+                            vim.api.nvim_set_current_buf(new_buf)
+
+                            -- put focus back on main buffer
+                            vim.api.nvim_command('wincmd h')
+
+                            local min_width = get_min_width(new_buf)
+                            set_state_margin(client, id, min_width)
+
+                            -- handle resizes
+                            vim.api.nvim_create_autocmd('WinResized', {
+                                callback = function(_)
+                                    local min_width2 = get_min_width(new_buf)
+                                    set_state_margin(client, id, min_width2)
+                                end,
+                            })
+
+                            state_buffers[id] = new_buf
+                        end)
+                    end
+                end,
+                -- }}}
+            },
+            SymbolsRequest = {
+                -- {{{
+                function()
+                    send_notification_to_all("symbols_request", {})
+                end,
+                -- }}}
+            },
+            SymbolsConvert = {
+                -- {{{
+                function()
+                    local clients = vim.lsp.get_clients({ name = 'isabelle' })
+                    local buf = vim.api.nvim_get_current_buf()
+                    local text = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+                    local t = table.concat(text, '\n')
+                    for _, client in ipairs(clients) do
+                        convert_symbols(client, buf, t)
+                    end
+                end,
+                -- }}}
+            }
+
+        },
         docs = {
             description = [[
 Isabelle VSCode Language Server
